@@ -1,8 +1,10 @@
 use std::{
     collections::HashMap,
     env,
+    fs::{self, OpenOptions},
+    io::{self, Write},
     net::{IpAddr, SocketAddr},
-    path::PathBuf,
+    path::{Path as FsPath, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -34,7 +36,7 @@ use tower_http::{
     services::{ServeDir, ServeFile},
     trace::TraceLayer,
 };
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
@@ -195,25 +197,33 @@ async fn main() {
         .init();
     let database_url = env::var("DATABASE_URL")
         .unwrap_or_else(|_| "sqlite://data/humane-exams.db?mode=rwc".into());
-    if database_url.starts_with("sqlite://data/") {
-        std::fs::create_dir_all("data").expect("create data directory");
+    if let Err(error) = fs::create_dir_all("data") {
+        error!(%error, "could not create the persistent data directory");
+        return;
     }
-    let db = SqlitePoolOptions::new()
+    let db = match SqlitePoolOptions::new()
         .max_connections(8)
         .connect(&database_url)
         .await
-        .expect("connect database");
-    MIGRATOR.run(&db).await.expect("run database migrations");
-    let secret = match env::var("SUBMISSION_ENCRYPTION_KEY") {
-        Ok(value) if value.len() >= 32 => value,
-        _ if env::var("APP_ENV").as_deref() == Ok("production") => {
-            panic!("SUBMISSION_ENCRYPTION_KEY must contain at least 32 characters in production")
-        }
-        _ => {
-            warn!("SUBMISSION_ENCRYPTION_KEY is unset or short; using an insecure development key");
-            "development-only-key-change-before-deploy".into()
+    {
+        Ok(db) => db,
+        Err(error) => {
+            error!(%error, "could not open the database");
+            return;
         }
     };
+    if let Err(error) = MIGRATOR.run(&db).await {
+        error!(%error, "could not run database migrations");
+        return;
+    }
+    let (secret, key_source) = match load_encryption_secret(FsPath::new("data")) {
+        Ok(value) => value,
+        Err(error) => {
+            error!(%error, "could not load or create the persistent encryption key");
+            return;
+        }
+    };
+    info!(key_source, "encryption key configuration ready");
     let key: [u8; 32] = Sha256::digest(secret.as_bytes()).into();
     let state = AppState {
         db,
@@ -251,6 +261,68 @@ async fn main() {
     .with_graceful_shutdown(shutdown_signal())
     .await
     .expect("serve requests");
+}
+
+/// Returns a supplied override or creates a CSPRNG secret once and keeps it with the SQLite data.
+/// The generated value is deliberately persisted: changing it would make existing encrypted
+/// submissions unreadable after a restart.
+fn load_encryption_secret(data_dir: &FsPath) -> io::Result<(String, &'static str)> {
+    load_encryption_secret_with_override(
+        data_dir,
+        env::var("SUBMISSION_ENCRYPTION_KEY").ok().as_deref(),
+    )
+}
+
+fn load_encryption_secret_with_override(
+    data_dir: &FsPath,
+    supplied_secret: Option<&str>,
+) -> io::Result<(String, &'static str)> {
+    if let Some(value) = supplied_secret.filter(|value| !value.trim().is_empty()) {
+        return Ok((value.to_owned(), "supplied"));
+    }
+
+    let path = data_dir.join("submission-encryption-key");
+    match fs::read_to_string(&path) {
+        Ok(value) if !value.trim().is_empty() => return Ok((value.trim().to_owned(), "persisted")),
+        Ok(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "encryption key file is empty",
+            ))
+        }
+        Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
+        Err(_) => {}
+    }
+
+    let mut random = [0_u8; 32];
+    OsRng.fill_bytes(&mut random);
+    let generated = hex::encode(random);
+    match write_secret_file(&path, &generated) {
+        Ok(()) => Ok((generated, "generated")),
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+            let persisted = fs::read_to_string(&path)?;
+            if persisted.trim().is_empty() {
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "encryption key file is empty",
+                ))
+            } else {
+                Ok((persisted.trim().to_owned(), "persisted"))
+            }
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn write_secret_file(path: &FsPath, value: &str) -> io::Result<()> {
+    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(fs::Permissions::from_mode(0o600))?;
+    }
+    writeln!(file, "{value}")?;
+    file.sync_all()
 }
 
 fn build_app(state: AppState) -> Router {
@@ -952,6 +1024,29 @@ mod tests {
         assert_ne!(token, hash);
         assert!(require_token(&token, &hash).is_ok());
         assert!(require_token("wrong", &hash).is_err());
+    }
+
+    #[test]
+    fn absent_secret_generates_and_persists_a_reusable_key() {
+        let directory = tempfile::tempdir().unwrap();
+        let (generated, source) =
+            load_encryption_secret_with_override(directory.path(), None).unwrap();
+        let (persisted, persisted_source) =
+            load_encryption_secret_with_override(directory.path(), None).unwrap();
+        assert_eq!(source, "generated");
+        assert_eq!(persisted_source, "persisted");
+        assert_eq!(generated, persisted);
+        assert_eq!(generated.len(), 64);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(directory.path().join("submission-encryption-key"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o600);
+        }
     }
 
     #[tokio::test]

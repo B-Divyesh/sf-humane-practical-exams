@@ -30,7 +30,7 @@ Prerequisites: Node 22+, npm, and current stable Rust.
 ```sh
 npm install
 npm run build
-SUBMISSION_ENCRYPTION_KEY='replace-this-development-key' cargo run
+cargo run
 ```
 
 Open <http://localhost:8080>. SQLite data is written to `data/humane-exams.db` by default.
@@ -64,8 +64,7 @@ seq 1 100 | xargs -P20 -I{} curl -fsS http://127.0.0.1:8080/health >/dev/null
 | `PORT` | `8080` | HTTP listen port |
 | `DATABASE_URL` | `sqlite://data/humane-exams.db?mode=rwc` | SQLite connection URL |
 | `STATIC_DIR` | `dist` | Built frontend directory |
-| `SUBMISSION_ENCRYPTION_KEY` | insecure development fallback | Master secret used to derive the at-rest encryption key; required in production |
-| `APP_ENV` | unset | Set to `production` to refuse startup without a 32+ character encryption key |
+| `SUBMISSION_ENCRYPTION_KEY` | generated and persisted in `data/submission-encryption-key` | Optional master-secret override used to derive the at-rest encryption key |
 | `BUILD_SHA` | `development` | Value returned by `/health` |
 
 Back up the encryption key separately from the database. Losing it makes encrypted submissions unrecoverable. Rotating it requires an explicit data migration.
@@ -73,14 +72,11 @@ Back up the encryption key separately from the database. Losing it makes encrypt
 ## Container
 
 ```sh
-docker build -t humane-practical-exams .
-docker run --rm -p 8080:8080 \
-  -e SUBMISSION_ENCRYPTION_KEY='a-long-random-production-secret' \
-  -v humane-exam-data:/app/data \
-  humane-practical-exams
+docker build --build-arg BUILD_SHA="$(git rev-parse HEAD)" -t humane-practical-exams .
+docker run --rm -e PORT=8080 -p 8080:8080 -v humane-exam-data:/app/data humane-practical-exams
 ```
 
-The runtime container runs as a non-root user. Deployment, DNS, billing product registration, backups, and secret management remain factory/operator responsibilities.
+The runtime container runs as a non-root user and needs only `PORT`; it listens on `0.0.0.0:$PORT`. On its first boot it generates a CSPRNG encryption key and saves it as mode `0600` in the mounted data directory. Persist and back up `/app/data` together: losing that file makes encrypted submissions unreadable. `SUBMISSION_ENCRYPTION_KEY` remains an optional override for an operator-managed key.
 
 ## License
 

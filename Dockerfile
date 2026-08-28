@@ -7,11 +7,12 @@ RUN npm run build
 
 FROM rust:1.88-bookworm AS server
 WORKDIR /build
-ARG BUILD_SHA=container
+ARG BUILD_SHA
 ENV BUILD_SHA=$BUILD_SHA
 COPY Cargo.toml Cargo.lock ./
 COPY migrations ./migrations
 COPY src ./src
+RUN test "${#BUILD_SHA}" -eq 40 && echo "$BUILD_SHA" | grep -Eq '^[0-9a-f]{40}$'
 RUN cargo build --release --locked
 
 FROM debian:bookworm-slim
@@ -20,7 +21,6 @@ RUN groupadd --system app && useradd --system --gid app --home-dir /app app \
 WORKDIR /app
 COPY --from=server /build/target/release/humane-practical-exams /usr/local/bin/humane-practical-exams
 COPY --from=web /build/dist ./dist
-ENV PORT=8080 STATIC_DIR=/app/dist DATABASE_URL=sqlite://data/humane-exams.db?mode=rwc APP_ENV=production
 VOLUME ["/app/data"]
 EXPOSE 8080
 USER app
