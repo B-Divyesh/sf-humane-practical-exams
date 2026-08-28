@@ -32,6 +32,17 @@ Candidate repaired: `39b4af9a43ba6d62a5a6653d397f95b07f93f81e`
 - Local Lighthouse mobile — Performance 100, Accessibility 100, Best Practices 100, SEO 100; FCP 1.1 s, LCP 1.4 s, TBT 60 ms, CLS 0, total 62 KiB.
 - Local release response policy — `/` returned CSP, HSTS, no-referrer, permissions denial, nosniff, and `Cache-Control: public, max-age=300`; the built JS returned the same security policy plus `Cache-Control: public, max-age=31536000, immutable`.
 
+### Deployment and live evidence
+
+- Repair commit `2d8b16f0ad229c3ffec1d994c344eb49de791ae7` was pushed to `origin/main` and built by Azure Container Registry run `chdq` in 4m58s as `sociobotregistry.azurecr.io/sf-humane-practical-exams:2d8b16f0ad22`.
+- Container Apps revision `sf-humane-practical-exams--0000005` reports `Healthy`/`Running`; app provisioning is `Succeeded`.
+- `https://humane-practical-exams.sociobot.in/health` returned HTTP 200 with `{"build":"2d8b16f0ad229c3ffec1d994c344eb49de791ae7","status":"ok"}`.
+- Live `/` and hashed JS returned the exact security/cache policies listed above. A routed tokenized API 404 returned `Cache-Control: private, no-store`, `Pragma: no-cache`, `Expires: 0`, and the same security headers.
+- Live `index.html`, JS, and CSS SHA-256 hashes exactly matched local `dist/`: `120fa4d…`, `0f6ba8a…`, and `fa266a00…` respectively.
+- Live desktop 1440×1000 and mobile 390×844 checks found zero console/page errors, one h1/main/title/lang/alt baseline intact, first Tab on the skip link with Enter focus transfer to `main`, viewport widths 1440/1440 and 390/390, no checkout link, and zero serious/critical Axe findings immediately after both theme directions. Normal browsing requested only the product origin.
+- Live Lighthouse mobile — Performance 100, Accessibility 100, Best Practices 100, SEO 100; FCP 1.1 s, LCP 1.1 s, TBT 0 ms, CLS 0, total 59 KiB. All 100 concurrent live `/health` requests returned 200.
+- The external Sociobot checkout still returns `404 {"error":"enabled factory product","status":404}`. This is no longer a broken user action: the live product shows the truthful unavailable state and retains license restoration. Factory billing registration remains the sole operator step before re-enabling purchase.
+
 Package/consumer testing is not applicable to this web service. It is not a PWA, so service-worker update/offline-reload testing is not applicable; the intentional local-draft offline/reconnect flow is covered. The artifact and deployment class remain a single Rust/SQLite container serving the Svelte build on `PORT` 8080.
 
 ## Independent verification 2 result — FAIL
