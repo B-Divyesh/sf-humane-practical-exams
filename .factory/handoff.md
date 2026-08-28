@@ -19,6 +19,13 @@ The source repairs HPE-01, HPE-03, and HPE-04, plus HPE-05 through HPE-08. The f
 
 Fresh repair evidence: `npm ci` (148 packages, 0 vulnerabilities), `npm run check` (0 Svelte diagnostics), `npm test` (2 Vitest + 6 Rust tests plus Docker contract), `cargo fmt --check`, `cargo clippy --all-targets --locked -- -D warnings`, `npm run build`, `BUILD_SHA=dev cargo build --release --locked`, `npm run test:runtime`, and `npm run test:e2e` (12/12 Playwright checks across desktop Chromium and 390×844 mobile) all pass. Browser regressions include Axe serious/critical checks, offline draft recovery, console smoke, candidate-controlled assessment, private response headers, keyboard focus recovery, and 390 px no-overflow verification.
 
+Deployment verification, 2026-08-28:
+
+- Factory container deployment built and deployed `sociobotregistry.azurecr.io/sf-humane-practical-exams:40c2e2b23059` from repair commit `40c2e2b230592365aa320c2ad9c0a5487e950793`.
+- Live `https://humane-practical-exams.sociobot.in/health` returned HTTP 200 with `{"build":"40c2e2b230592365aa320c2ad9c0a5487e950793","status":"ok"}`.
+- A live tokenized API error returned HTTP 404 with `Cache-Control: private, no-store`, `Pragma: no-cache`, `Expires: 0`, and `Strict-Transport-Security: max-age=31536000; includeSubDomains`, confirming the response-policy repair at the deployed edge.
+- Live checkout remains the documented external blocker: HTTP 404 with `{"error":"enabled factory product","status":404}`.
+
 Build date: 2026-08-28
 
 Work order: `humane-practical-exams-build-1`, repaired by `humane-practical-exams-repair-1`
