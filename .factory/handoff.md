@@ -2,9 +2,19 @@
 
 Build date: 2026-08-28
 
-Work order: `humane-practical-exams-build-1`
+Work order: `humane-practical-exams-build-1`, repaired by `humane-practical-exams-repair-1`
 
 Artifact: single-container Rust/SQLite service with a Vite/Svelte frontend
+
+## Repair: container startup and ingress
+
+- Root cause reproduced from deployed revision `sf-humane-practical-exams--x8611dp`: the image set `APP_ENV=production`, while `src/main.rs` deliberately panicked when `SUBMISSION_ENCRYPTION_KEY` was missing. Azure supplied only `PORT=8080`, so the process exited before binding; Container Apps marked the revision `ActivationFailed`/`Unhealthy`, yielding the custom-domain `000`.
+- The runtime now needs only `PORT` (default `8080`) and binds `0.0.0.0:$PORT`. `DATABASE_URL` and `STATIC_DIR` remain optional overrides with safe in-image working-directory defaults.
+- Missing `SUBMISSION_ENCRYPTION_KEY` now causes a 32-byte CSPRNG secret to be created once in `data/submission-encryption-key`, mode `0600`, and reused on restart. A supplied value still overrides it. Startup logs only `key_source=generated|persisted|supplied`, never the secret.
+- The runtime image no longer injects `APP_ENV`, `DATABASE_URL`, `STATIC_DIR`, or `PORT`. The Docker build requires a 40-character lowercase commit SHA and compiles it into `/health`.
+- Focused coverage: Rust verifies generated-key persistence and permissions; `npm run test:runtime` launches the executable with `env -i PORT=18081` (no other app environment), verifies `/health`, `/`, the generated key, permissions, and startup log. Browser coverage now includes offline candidate-draft persistence.
+
+Repair commit deployed: `f343e99779713cc264025782777cf0918ed6aa29` (`fix: start container with only port`).
 
 ## What was built
 
@@ -26,22 +36,32 @@ Local production-style run:
 ```sh
 npm ci
 npm run build
-SUBMISSION_ENCRYPTION_KEY='at-least-32-random-characters-here' APP_ENV=production cargo run --release
+cargo run --release
 ```
 
 Container deployment:
 
 ```sh
 docker build --build-arg BUILD_SHA="$(git rev-parse HEAD)" -t humane-practical-exams .
-docker run --rm -p 8080:8080 \
-  -e SUBMISSION_ENCRYPTION_KEY='at-least-32-random-characters-here' \
-  -v humane-exam-data:/app/data \
-  humane-practical-exams
+docker run --rm -e PORT=8080 -p 8080:8080 -v humane-exam-data:/app/data humane-practical-exams
 ```
 
-Production startup fails closed if `SUBMISSION_ENCRYPTION_KEY` is absent or shorter than 32 characters. Persist `/app/data` and back up the encryption key separately. The service runs as an unprivileged `app` user on `PORT=8080`.
+The service runs as an unprivileged `app` user on `0.0.0.0:$PORT`. Persist `/app/data` and back it up with the SQLite database; the generated encryption-key file is needed to decrypt existing submissions.
 
 ## Verification performed
+
+Repair verification, 2026-08-28:
+
+- Exact clean builder command: `npm ci && npm run build && cargo build --release --locked` — pass. The same Vite/Rust stages also passed in Azure Container Registry build run `ch9w`, image digest `sha256:1bc260d65ab348e62d820a797a42b02f94f9ae0ed910b97dfbb77c280874058b`.
+- `npm run check` — pass (0 Svelte errors/warnings); `npm test` — pass (2 frontend + 4 Rust tests); `cargo fmt --check` — pass; `npm run test:runtime` — pass.
+- `npm run test:e2e` — pass: 8 Playwright tests across desktop Chromium and 390×844 mobile, including the full create/candidate/assessor/export flow, serious/critical Axe checks, console smoke, and offline local-draft recovery.
+- Live deployment: `az containerapp update` deployed `sociobotregistry.azurecr.io/sf-humane-practical-exams:f343e9977971`; revision `sf-humane-practical-exams--0000001` is `Healthy`, externally exposed on ingress target port `8080`, with only `PORT` configured.
+- Live identity and ingress: both `https://humane-practical-exams.sociobot.in/health` and the Azure FQDN returned HTTP 200 and `{"build":"f343e99779713cc264025782777cf0918ed6aa29","status":"ok"}`. Application logs recorded `key_source=generated` and `service listening` on port 8080.
+- Live `verify-url.sh` pass: 631 ms load, no browser console errors, title present, `lang=en`, exactly one h1, main landmark, and no images missing alt. A live mobile keyboard check reached the visible “Skip to main content” link first; `/privacy` and `/terms` each rendered their matching h1 with no console errors.
+- Privacy review: no analytics/tracking scripts or third-party fonts are loaded; the only external runtime endpoint is the documented Sociobot license verifier. Privacy and terms routes are live.
+- Live Lighthouse mobile report: Performance 99, Accessibility 100, Best Practices 100, SEO 100; LCP 1.21 s, CLS 0, TBT 99 ms. A 100-request live `/health` smoke completed in 2.547 s with no failures.
+
+### Original builder verification
 
 - `npm run check`: pass; Svelte reports 0 errors and 0 warnings.
 - `npm test`: pass; 2 frontend tests and 3 Rust tests, including encrypted-data round-trip, token authorization, and create/open API integration.
@@ -58,7 +78,7 @@ Production startup fails closed if `SUBMISSION_ENCRYPTION_KEY` is absent or shor
 
 ## Known gaps and operator next steps
 
-- The worker image does not include Docker/Podman, so the Dockerfile could not be executed here. The exact two build stages (`npm run build` and `cargo build --release --locked`) were run successfully on the host; factory CI should still run `docker build` before deployment.
+- Docker is not installed in the worker image, but Azure Container Registry build run `ch9w` successfully built and pushed the production Docker image used by the live revision.
 - The Sociobot product must be registered by the factory before a live checkout/verification can succeed. No product ID is hardcoded; the required slug URL is used. Live payment was not attempted.
 - Capability URLs provide deliberate passwordless access. An assessor should distribute candidate links through an appropriate channel and store the assessor link like a password. For a future multi-tenant version, add organization accounts and per-candidate capability tokens.
 - SQLite is appropriate for the intended single-tenant/self-hosted v1. A high-write shared deployment should move the same data model to PostgreSQL and a managed encrypted object store.
