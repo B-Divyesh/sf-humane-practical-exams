@@ -1,0 +1,26 @@
+{
+  "name": "humane-practical-exams",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config frontend/vite.config.ts",
+    "dev:api": "cargo run",
+    "build": "vite build --config frontend/vite.config.ts",
+    "test": "vitest run --config frontend/vite.config.ts && cargo test",
+    "test:e2e": "playwright test",
+    "check": "svelte-check --workspace frontend --tsconfig ./tsconfig.json"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/svelte": "^5.2.6",
+    "jsdom": "^26.0.0",
+    "svelte": "^5.19.6",
+    "svelte-check": "^4.1.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vitest": "^3.0.5"
+  }
+}
