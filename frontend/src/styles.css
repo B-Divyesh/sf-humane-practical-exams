@@ -84,7 +84,7 @@ header nav .nav-action { padding: 0 17px; border: 1px solid var(--line); border-
 h1 i { color: var(--accent); font-family: Georgia, serif; font-weight: 400; }
 .lede { max-width: 630px; color: var(--muted); font-size: clamp(1.05rem, 2vw, 1.25rem); line-height: 1.55; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 34px 0 22px; }
-.button { min-height: 48px; padding: 0 19px; border: 1px solid transparent; border-radius: 13px; display: inline-flex; align-items: center; justify-content: center; gap: 18px; color: var(--text); background: transparent; font-weight: 750; text-decoration: none; cursor: pointer; transition: transform .18s ease, background .18s ease, border-color .18s ease; }
+.button { min-height: 48px; padding: 0 19px; border: 1px solid transparent; border-radius: 13px; display: inline-flex; align-items: center; justify-content: center; gap: 18px; color: var(--text); background: transparent; font-weight: 750; text-decoration: none; cursor: pointer; transition: transform .18s ease, border-color .18s ease; }
 .button:hover:not(:disabled) { transform: translateY(-2px); }
 .button.primary { background: var(--accent); color: var(--accent-contrast); box-shadow: 0 10px 32px rgba(49, 205, 166, .17); }
 .button.quiet { border-color: var(--line); background: var(--glass); }
@@ -135,6 +135,7 @@ h1 i { color: var(--accent); font-family: Georgia, serif; font-weight: 400; }
 .price-card ul { margin: 24px 0 28px; padding-left: 22px; color: var(--muted); }
 .price-card li { margin: 9px 0; }
 .price-card small { display: block; margin-top: 18px; color: var(--muted); }
+.purchase-unavailable { margin: 22px 0 0; padding: 14px 16px; border-left: 3px solid var(--amber); background: color-mix(in srgb, var(--amber) 7%, transparent); color: var(--text); }
 .final-cta { margin-top: 50px; padding: 120px 24px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: center; background: radial-gradient(circle at 50% 80%, rgba(60,199,163,.12), transparent 40%); }
 .final-cta .eyebrow { justify-content: center; }
 .final-cta h2 { font-size: clamp(2.5rem, 6vw, 5rem); }

@@ -233,9 +233,7 @@ async fn main() {
     spawn_cleanup(state.clone());
 
     let dist = PathBuf::from(env::var("STATIC_DIR").unwrap_or_else(|_| "dist".into()));
-    let fallback = ServeFile::new(dist.join("index.html"));
-    let app = protected_app(state)
-        .fallback_service(ServeDir::new(dist).fallback(fallback))
+    let app = app_with_static(state, dist)
         .layer(DefaultBodyLimit::disable())
         .layer(RequestBodyLimitLayer::new(16 * 1024 * 1024))
         .layer(CompressionLayer::new())
@@ -341,12 +339,26 @@ fn build_app(state: AppState) -> Router {
         .with_state(state)
 }
 
+#[cfg(test)]
 fn protected_app(state: AppState) -> Router {
     let middleware_state = state.clone();
     build_app(state).layer(middleware::from_fn_with_state(
         middleware_state,
         security_headers,
     ))
+}
+
+fn app_with_static(state: AppState, dist: PathBuf) -> Router {
+    let middleware_state = state.clone();
+    let fallback = ServeFile::new(dist.join("index.html"));
+    build_app(state)
+        .fallback_service(ServeDir::new(dist).fallback(fallback))
+        // This must wrap the fallback service too. Axum only applies a router
+        // layer to routes/fallbacks that already exist when the layer is added.
+        .layer(middleware::from_fn_with_state(
+            middleware_state,
+            security_headers,
+        ))
 }
 
 async fn security_headers(
@@ -655,13 +667,29 @@ async fn list_submissions(
 ) -> Result<Json<Value>, AppError> {
     let (_, _, assessor_hash) = load_exam(&state.db, &exam_id).await?;
     require_token(&query.token, &assessor_hash)?;
-    let rows = sqlx::query("SELECT id FROM submissions WHERE exam_id=? ORDER BY started_at DESC")
+    let now = Utc::now().to_rfc3339();
+    sqlx::query("DELETE FROM submissions WHERE exam_id=? AND delete_at<=?")
         .bind(&exam_id)
-        .fetch_all(&state.db)
+        .bind(&now)
+        .execute(&state.db)
         .await?;
+    let rows = sqlx::query(
+        "SELECT id FROM submissions WHERE exam_id=? AND delete_at>? ORDER BY started_at DESC",
+    )
+    .bind(&exam_id)
+    .bind(&now)
+    .fetch_all(&state.db)
+    .await?;
     let mut values = Vec::with_capacity(rows.len());
     for row in rows {
-        values.push(load_submission(&state, row.get("id")).await?);
+        // A row can cross its deletion boundary after the list query. The
+        // loader checks again before decrypting, so skip a concurrently
+        // expired record rather than exposing it or failing the whole queue.
+        match load_submission(&state, row.get("id")).await {
+            Ok(submission) => values.push(submission),
+            Err(AppError::NotFound) => {}
+            Err(error) => return Err(error),
+        }
     }
     Ok(Json(json!({ "submissions": values })))
 }
@@ -863,6 +891,14 @@ async fn load_submission(state: &AppState, id: &str) -> Result<Submission, AppEr
         .fetch_optional(&state.db)
         .await?
         .ok_or(AppError::NotFound)?;
+    let delete_at: String = row.get("delete_at");
+    if delete_at <= Utc::now().to_rfc3339() {
+        sqlx::query("DELETE FROM submissions WHERE id=?")
+            .bind(id)
+            .execute(&state.db)
+            .await?;
+        return Err(AppError::NotFound);
+    }
     let checkpoint_rows = sqlx::query("SELECT id,label,hash,created_at FROM checkpoints WHERE submission_id=? ORDER BY created_at").bind(id).fetch_all(&state.db).await?;
     let checkpoints: Vec<Checkpoint> = checkpoint_rows
         .into_iter()
@@ -898,7 +934,7 @@ async fn load_submission(state: &AppState, id: &str) -> Result<Submission, AppEr
         status: row.get("status"),
         started_at: row.get("started_at"),
         submitted_at: row.get("submitted_at"),
-        delete_at: row.get("delete_at"),
+        delete_at,
         artifact_name,
         artifact_size: row.get("artifact_size"),
         checkpoint_count: checkpoints.len(),
@@ -1315,6 +1351,95 @@ mod tests {
         assert_eq!(
             body["error"],
             "Add a work log or artifact before submitting."
+        );
+    }
+
+    #[tokio::test]
+    async fn assessor_list_purges_records_that_expire_while_service_is_running() {
+        let state = state().await;
+        let app = protected_app(state.clone());
+        let (exam_id, _, assessor_token, submission_id) = create_started_submission(&app).await;
+
+        sqlx::query("UPDATE submissions SET delete_at=? WHERE id=?")
+            .bind("2000-01-01T00:00:00Z")
+            .bind(&submission_id)
+            .execute(&state.db)
+            .await
+            .unwrap();
+
+        let (status, _, body) = json_request(
+            &app,
+            Request::get(format!(
+                "/api/exams/{exam_id}/submissions?token={assessor_token}"
+            ))
+            .body(Body::empty())
+            .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["submissions"], json!([]));
+        let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM submissions WHERE id=?")
+            .bind(&submission_id)
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(remaining, 0, "expired evidence must be physically purged");
+    }
+
+    #[tokio::test]
+    async fn static_shell_and_assets_receive_security_and_cache_headers() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::create_dir_all(directory.path().join("assets")).unwrap();
+        fs::write(
+            directory.path().join("index.html"),
+            "<!doctype html><main>shell</main>",
+        )
+        .unwrap();
+        fs::write(
+            directory.path().join("assets/index-deadbeef.js"),
+            "export {};",
+        )
+        .unwrap();
+        let app = app_with_static(state().await, directory.path().to_path_buf());
+
+        let shell = app
+            .clone()
+            .oneshot(Request::get("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(shell.status(), StatusCode::OK);
+        let headers = shell.headers();
+        assert!(headers.contains_key(header::CONTENT_SECURITY_POLICY));
+        assert_eq!(
+            headers.get(header::STRICT_TRANSPORT_SECURITY).unwrap(),
+            "max-age=31536000; includeSubDomains"
+        );
+        assert_eq!(headers.get(header::REFERRER_POLICY).unwrap(), "no-referrer");
+        assert!(headers.contains_key("permissions-policy"));
+        assert_eq!(
+            headers.get(header::X_CONTENT_TYPE_OPTIONS).unwrap(),
+            "nosniff"
+        );
+        assert_eq!(
+            headers.get(header::CACHE_CONTROL).unwrap(),
+            "public, max-age=300"
+        );
+
+        let asset = app
+            .oneshot(
+                Request::get("/assets/index-deadbeef.js")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(asset.status(), StatusCode::OK);
+        assert!(asset
+            .headers()
+            .contains_key(header::CONTENT_SECURITY_POLICY));
+        assert_eq!(
+            asset.headers().get(header::CACHE_CONTROL).unwrap(),
+            "public, max-age=31536000, immutable"
         );
     }
 }

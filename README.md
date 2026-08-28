@@ -13,7 +13,7 @@ Live product: <https://humane-practical-exams.sociobot.in>
 - Candidate and assessor tokens are stored only as one-way SHA-256 hashes.
 - Every submission has an automatic deletion date; assessors can delete sooner.
 - Accessibility accommodations, grading, deletion, and record export are always free.
-- The optional $39 one-time provider unlock adds local templates and provider branding through the Sociobot billing API. No payment provider is embedded.
+- The optional $39 one-time provider unlock adds local templates and provider branding through the Sociobot billing API. Existing licenses can be restored; new purchases are shown as unavailable until the factory enables the product in its catalog. No payment provider is embedded.
 
 ## Stack
 

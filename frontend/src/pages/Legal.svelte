@@ -20,7 +20,7 @@
     <h2>Not cheat-proof</h2><p>The service does not verify identity or guarantee that work was completed without outside help. Checkpoint hashes show that chosen content existed at a recorded time; they do not prove authorship. Assessment decisions remain the assessor’s responsibility.</p>
     <h2>Acceptable use</h2><p>Do not upload malware, unlawful material, secrets, or data you do not have permission to process. Do not use capability links to access someone else’s assessment. Operators may remove harmful content or rate-limit abusive traffic.</p>
     <h2>Data and availability</h2><p>Keep exported copies of records you must retain. Content is deleted according to the exam’s schedule and may be unavailable during maintenance. The software is provided without warranties to the extent permitted by law.</p>
-    <h2>Provider unlock</h2><p>The $39 provider unlock is a one-time purchase for the current listed features. Sociobot/Dodo is the merchant of record and handles payment and refunds. A refunded purchase revokes its license automatically. Accessibility, safety, grading, and core export are not paid features.</p>
+    <h2>Provider unlock</h2><p>When available, the $39 provider unlock is a one-time purchase for the current listed features. New purchases are temporarily unavailable; existing licenses can still be restored. Sociobot/Dodo is the merchant of record and handles payment and refunds. A refunded purchase revokes its license automatically. Accessibility, safety, grading, and core export are not paid features.</p>
     <h2>Self-hosting</h2><p>The source is MIT licensed. A self-hosting organization is the service operator and is responsible for notices, retention choices, backups, and safeguarding its encryption key.</p>
   {/if}
 </main>

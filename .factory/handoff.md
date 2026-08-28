@@ -1,5 +1,39 @@
 # Humane Practical Exams — build handoff
 
+## Repair 3 — verifier blockers resolved in product code
+
+Repair date: 2026-08-28
+
+Work order: `humane-practical-exams-repair-3`
+
+Source report: `.factory/verification-2.md` at `4b82d8a7785fe90bf4a7579572578b5e87d57e90`
+
+Candidate repaired: `39b4af9a43ba6d62a5a6653d397f95b07f93f81e`
+
+### Repairs
+
+- **HPE-09:** the assessor list now deletes records at or past `delete_at`, selects only unexpired IDs, and rechecks expiry inside `load_submission` before checkpoint, assessment, alias, work-log, command-history, or artifact-name decryption. A record that crosses the boundary between the list query and load is purged and omitted. The regression advances a live-process row to `2000-01-01`, requests the queue, asserts an empty response, and verifies physical deletion.
+- **HPE-10:** security middleware now wraps the router only after the static directory and SPA fallback are attached. Exact integration coverage requests `/` and a hashed-style asset, checking CSP, HSTS, referrer policy, permissions policy, nosniff, five-minute HTML caching, and one-year immutable asset caching. Local release responses include every expected header.
+- **HPE-02:** the external Sociobot catalog still returns 404 for this slug and repository policy forbids changing billing infrastructure. The product no longer exposes a checkout link that cannot complete; it clearly says new purchases are temporarily unavailable. Incoming-license capture, URL cleanup, daily verification, paste-to-restore, and already-unlocked provider features remain intact. Restore and legal copy now state the same availability. Re-enable the buy action only after the factory registers the product and a hosted checkout redirect is observed.
+- **HPE-11:** primary-button backgrounds no longer transition between theme token pairs. Transform and border feedback remain. Browser regression runs Axe immediately after dark-to-light and light-to-dark switches and confirms the background is not a transitioned property.
+
+### Fresh local evidence
+
+- `npm ci` — pass; 148 packages installed, 0 vulnerabilities.
+- `npm run check` — pass; 0 Svelte errors and 0 warnings.
+- `npm test` — pass; 3 Vitest tests, 8 Rust tests, and Dockerfile contract.
+- `cargo fmt --check` — pass.
+- `cargo clippy --all-targets --locked -- -D warnings` — pass.
+- `npm run build` — pass; `dist/index.html` plus 96,897-byte JS (35,295-byte gzip) and 25,955-byte CSS (6,355-byte gzip).
+- `BUILD_SHA=repair-qa cargo build --release --locked` — pass.
+- `npm run test:runtime` — pass with only `PORT` supplied; the generated key remains mode `0600`.
+- `npm run test:e2e` — 14/14 pass across desktop Chromium and 390×844 mobile. Coverage includes full create-to-assess, active-submission protection, keyboard focus recovery, no 390 px overflow, offline drafts, console smoke, no broken checkout action, and transition-time Axe scans in both theme directions.
+- `/opt/fleet/lib/verify-url.sh http://127.0.0.1:18082` — pass in 588 ms: title, `lang=en`, one h1, main landmark, alt text, labeled buttons, and zero console errors. Desktop and mobile screenshots were visually reviewed.
+- Local Lighthouse mobile — Performance 100, Accessibility 100, Best Practices 100, SEO 100; FCP 1.1 s, LCP 1.4 s, TBT 60 ms, CLS 0, total 62 KiB.
+- Local release response policy — `/` returned CSP, HSTS, no-referrer, permissions denial, nosniff, and `Cache-Control: public, max-age=300`; the built JS returned the same security policy plus `Cache-Control: public, max-age=31536000, immutable`.
+
+Package/consumer testing is not applicable to this web service. It is not a PWA, so service-worker update/offline-reload testing is not applicable; the intentional local-draft offline/reconnect flow is covered. The artifact and deployment class remain a single Rust/SQLite container serving the Svelte build on `PORT` 8080.
+
 ## Independent verification 2 result — FAIL
 
 Verification date: 2026-08-28

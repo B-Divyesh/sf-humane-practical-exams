@@ -2,7 +2,7 @@
   import Header from '../components/Header.svelte';
   import Footer from '../components/Footer.svelte';
   import { navigate } from '../lib/navigation';
-  import { checkoutUrl, license } from '../lib/license';
+  import { license, purchase } from '../lib/license';
 </script>
 
 <Header />
@@ -73,7 +73,7 @@
       {#if $license.unlocked}
         <p class="status-pill success">Provider features unlocked</p>
       {:else}
-        <a class="button primary" href={checkoutUrl}>Buy provider unlock <span aria-hidden="true">↗</span></a>
+        <p class="purchase-unavailable" role="status">{purchase.notice} Existing license holders can restore access when creating an exam.</p>
       {/if}
       <small>Sociobot/Dodo is merchant of record. Refunds are handled there.</small>
     </article>

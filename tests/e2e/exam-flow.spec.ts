@@ -10,6 +10,24 @@ test('landing and exam builder have no serious accessibility violations', async 
   expect(results.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact || ''))).toEqual([]);
 });
 
+test('theme changes never animate primary buttons through low-contrast colors', async ({ page }) => {
+  await page.goto('/');
+  const primary = page.getByRole('link', { name: 'Create an exam', exact: true }).first();
+  await expect(primary).toBeVisible();
+  await expect(page.locator('a[href*="/checkout"]')).toHaveCount(0);
+  await expect(page.getByText(/New provider unlock purchases are temporarily unavailable/)).toBeVisible();
+  expect(await primary.evaluate((element) => getComputedStyle(element).transitionProperty))
+    .not.toContain('background');
+
+  await page.getByRole('button', { name: 'Use light theme' }).click();
+  let results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact || ''))).toEqual([]);
+
+  await page.getByRole('button', { name: 'Use dark theme' }).click();
+  results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact || ''))).toEqual([]);
+});
+
 test('instructor creates an exam and landing page has no console errors', async ({ page }) => {
   const errors: string[] = [];
   page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });

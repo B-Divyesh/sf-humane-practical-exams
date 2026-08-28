@@ -17,4 +17,10 @@ describe('landing page', () => {
     expect(screen.getByText('No webcam or room recording')).toBeInTheDocument();
     expect(screen.getByText('This tool is not “cheat-proof.” It helps assessors make a defensible judgement from visible work.')).toBeInTheDocument();
   });
+
+  it('does not advertise a broken checkout action', () => {
+    render(Landing);
+    expect(screen.queryByRole('link', { name: /buy provider unlock/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/New provider unlock purchases are temporarily unavailable/)).toBeInTheDocument();
+  });
 });

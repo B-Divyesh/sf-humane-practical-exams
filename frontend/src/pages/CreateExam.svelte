@@ -3,7 +3,7 @@
   import Header from '../components/Header.svelte';
   import Footer from '../components/Footer.svelte';
   import { api, absoluteLink } from '../lib/api';
-  import { checkoutUrl, license, restoreLicense } from '../lib/license';
+  import { license, purchase, restoreLicense } from '../lib/license';
 
   type CriterionDraft = { label: string; description: string; max_score: number };
   let title = '';
@@ -98,7 +98,7 @@
       <p>Everything the candidate will be asked to share is visible here. No hidden collection, no monitoring in the background.</p>
     </section>
 
-    {#if $license.notice}<div class="notice" role="status">{$license.notice} <a href={checkoutUrl}>View unlock</a></div>{/if}
+    {#if $license.notice}<div class="notice" role="status">{$license.notice} {purchase.notice}</div>{/if}
     {#if $license.unlocked && localStorage.getItem('hpe:last-template')}<button type="button" class="template-button" onclick={loadTemplate}>Load your last exam template</button>{/if}
 
     <form class="exam-form" onsubmit={(event) => { event.preventDefault(); submit(); }}>
@@ -145,7 +145,7 @@
     </form>
 
     {#if !$license.unlocked}
-      <details class="restore-panel"><summary>Have a provider license?</summary><div><label for="restore">Paste license token</label><input id="restore" bind:value={restoreToken} autocomplete="off" /><button type="button" class="button quiet" onclick={() => restoreLicense(restoreToken)}>Verify and restore</button><p>Provider unlock is a $39 one-time purchase for templates and branding. Core exam and export features remain free.</p></div></details>
+      <details class="restore-panel"><summary>Have a provider license?</summary><div><label for="restore">Paste license token</label><input id="restore" bind:value={restoreToken} autocomplete="off" /><button type="button" class="button quiet" onclick={() => restoreLicense(restoreToken)}>Verify and restore</button><p>Existing provider licenses unlock templates and branding. {purchase.notice} Core exam and export features remain free.</p></div></details>
     {/if}
   {/if}
 </main>

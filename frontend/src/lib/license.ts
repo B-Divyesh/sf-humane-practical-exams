@@ -3,7 +3,14 @@ import { writable } from 'svelte/store';
 const slug = 'humane-practical-exams';
 const tokenKey = `sb_license:${slug}`;
 const verdictKey = `${tokenKey}:verdict`;
-export const checkoutUrl = `https://api.sociobot.in/api/v1/products/${slug}/checkout`;
+// The Sociobot catalog does not currently expose this product. Keep license
+// restoration working for existing tokens, but do not send a new customer to
+// a checkout route that returns 404. Enable the buy action only after the
+// factory registers the product and verifies its hosted redirect.
+export const purchase = {
+  available: false,
+  notice: 'New provider unlock purchases are temporarily unavailable.'
+} as const;
 export const license = writable({ unlocked: false, checking: false, notice: '' });
 
 export function captureLicense() {
