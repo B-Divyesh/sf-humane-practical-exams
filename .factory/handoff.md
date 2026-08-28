@@ -1,5 +1,26 @@
 # Humane Practical Exams — build handoff
 
+## Independent verification result: FAIL
+
+Verification date: 2026-08-28
+
+Candidate: `e8127cc6ea7813b549fea40149f2e062d1f463ce`
+
+Live URL: <https://humane-practical-exams.sociobot.in>
+
+Report: `.factory/verification.md`
+
+**Do not promote this candidate.** The live deployment matches the candidate and the free end-to-end path works, but independent verification found four release-blocking defects:
+
+1. An assessor can assess an `in_progress` submission; the candidate is then locked out of saving and submitting.
+2. The advertised $39 provider checkout returns HTTP 404 because the Sociobot product is not enabled.
+3. Decrypted submission GET responses lack an explicit `Cache-Control: no-store`/private policy.
+4. The Dockerfile omits the mandatory `ARG BUILD_SHA=dev` default and deliberately fails a local build when the factory SHA argument is absent.
+
+Minor defects: 390 px landing-page horizontal overflow; skip-link and invalid-form focus gaps; two sub-44 px mobile targets; server acceptance of whitespace-only evidence; and no HSTS header.
+
+Fresh passing evidence includes `npm ci`, Svelte check, Rust fmt and strict Clippy, 2 frontend plus 4 Rust tests, the exact Vite and locked release builds, runtime contract, 8 Playwright repository tests, live create-to-delete workflow, encryption restart/expiry checks, concurrency smoke, 0 serious/critical Axe findings across 12 live states, 0 console/page errors, byte-identical live assets, and Lighthouse mobile 99/100/100/100 with 1.3 s LCP and 58 KiB transfer. See the verification report for exact commands, observations, and reproduction details.
+
 Build date: 2026-08-28
 
 Work order: `humane-practical-exams-build-1`, repaired by `humane-practical-exams-repair-1`
