@@ -1,0 +1,22 @@
+{
+  "slug": "humane-practical-exams",
+  "title": "Humane Practical Exams",
+  "territory": "utilities",
+  "user": "An instructor or training provider assessing practical technical skills who wants credible evidence without invasive remote-proctoring surveillance.",
+  "smallest_useful_product": "Self-hostable web app for a timed task brief, local artifact upload, candidate-written work log, checkpoint hashes, and assessor rubric with an exportable assessment record.",
+  "success_measure": "Assessors can grade 90% of submissions from the artifact and rubric alone, and fewer than 10% require a surveillance-style follow-up.",
+  "artifact_class": "web-with-backend",
+  "monetization": "one-time",
+  "constraints": [
+    "Do not market it as cheat-proof",
+    "Minimize personally identifiable data",
+    "Encrypt submissions and implement deletion dates",
+    "Accessibility accommodations must be configurable"
+  ],
+  "non_goals": [
+    "Webcam monitoring",
+    "Browser lockdown",
+    "Identity verification",
+    "AI cheating detection"
+  ]
+}
