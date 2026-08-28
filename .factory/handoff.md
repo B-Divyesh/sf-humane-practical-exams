@@ -1,5 +1,17 @@
 # Humane Practical Exams — build handoff
 
+## Independent verification 2 result — FAIL
+
+Verification date: 2026-08-28
+
+Candidate: `39b4af9a43ba6d62a5a6653d397f95b07f93f81e`
+
+Live URL: <https://humane-practical-exams.sociobot.in>
+
+Report: `.factory/verification-2.md`
+
+**FAIL — do not promote.** Fresh verification confirms that `/health` reports the exact candidate and all local quality gates plus the live create-to-assess workflow pass. Release remains blocked by three major defects: the assessor submissions list decrypts expired records until the hourly cleanup runs (HPE-09); static HTML/assets bypass CSP, HSTS, referrer, permissions, nosniff, and cache headers (HPE-10); and the advertised Sociobot checkout still returns 404 (HPE-02). A minor light-theme transition contrast failure also remains (HPE-11). See `.factory/verification-2.md` for exact reproduction evidence, passing checks, hashes, Lighthouse results, and required fixes.
+
 ## Repair 2 verification result
 
 Verification date: 2026-08-28
