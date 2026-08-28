@@ -234,16 +234,11 @@ async fn main() {
 
     let dist = PathBuf::from(env::var("STATIC_DIR").unwrap_or_else(|_| "dist".into()));
     let fallback = ServeFile::new(dist.join("index.html"));
-    let middleware_state = state.clone();
-    let app = build_app(state)
+    let app = protected_app(state)
         .fallback_service(ServeDir::new(dist).fallback(fallback))
         .layer(DefaultBodyLimit::disable())
         .layer(RequestBodyLimitLayer::new(16 * 1024 * 1024))
         .layer(CompressionLayer::new())
-        .layer(middleware::from_fn_with_state(
-            middleware_state,
-            security_headers,
-        ))
         .layer(CatchPanicLayer::new())
         .layer(TraceLayer::new_for_http());
     let port: u16 = env::var("PORT")
@@ -346,6 +341,14 @@ fn build_app(state: AppState) -> Router {
         .with_state(state)
 }
 
+fn protected_app(state: AppState) -> Router {
+    let middleware_state = state.clone();
+    build_app(state).layer(middleware::from_fn_with_state(
+        middleware_state,
+        security_headers,
+    ))
+}
+
 async fn security_headers(
     State(state): State<AppState>,
     request: Request<Body>,
@@ -362,17 +365,23 @@ async fn security_headers(
         *entry = (Instant::now(), 0);
     }
     if entry.1 >= 300 {
-        return (
+        let mut response = (
             StatusCode::TOO_MANY_REQUESTS,
             Json(json!({ "error": "Too many requests. Wait a moment and try again." })),
         )
             .into_response();
+        apply_security_headers(response.headers_mut(), request.uri().path());
+        return response;
     }
     entry.1 += 1;
     drop(windows);
     let path = request.uri().path().to_owned();
     let mut response = next.run(request).await;
-    let headers = response.headers_mut();
+    apply_security_headers(response.headers_mut(), &path);
+    response
+}
+
+fn apply_security_headers(headers: &mut axum::http::HeaderMap, path: &str) {
     headers.insert(
         header::X_CONTENT_TYPE_OPTIONS,
         HeaderValue::from_static("nosniff"),
@@ -386,7 +395,20 @@ async fn security_headers(
         header::HeaderName::from_static("permissions-policy"),
         HeaderValue::from_static("camera=(), microphone=(), geolocation=(), browsing-topics=()"),
     );
-    if path.starts_with("/assets/") {
+    headers.insert(
+        header::STRICT_TRANSPORT_SECURITY,
+        HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+    );
+    if path.starts_with("/api/") {
+        // Capability URLs can return decrypted evidence. Never let a browser or
+        // intermediary retain any dynamic API response, including an error.
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("private, no-store"),
+        );
+        headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
+        headers.insert(header::EXPIRES, HeaderValue::from_static("0"));
+    } else if path.starts_with("/assets/") {
         headers.insert(
             header::CACHE_CONTROL,
             HeaderValue::from_static("public, max-age=31536000, immutable"),
@@ -397,7 +419,6 @@ async fn security_headers(
             HeaderValue::from_static("public, max-age=300"),
         );
     }
-    response
 }
 
 async fn health() -> Json<Value> {
@@ -604,8 +625,16 @@ async fn submit_submission(
         return Err(AppError::Forbidden);
     }
     ensure_editable(&state.db, &id).await?;
-    let row = sqlx::query("SELECT length(artifact_encrypted) AS artifact, length(work_log_encrypted) AS work FROM submissions WHERE id=?").bind(&id).fetch_one(&state.db).await?;
-    if row.get::<Option<i64>, _>("artifact").is_none() && row.get::<i64, _>("work") < 29 {
+    let row =
+        sqlx::query("SELECT artifact_encrypted, work_log_encrypted FROM submissions WHERE id=?")
+            .bind(&id)
+            .fetch_one(&state.db)
+            .await?;
+    let has_artifact = row
+        .get::<Option<Vec<u8>>, _>("artifact_encrypted")
+        .is_some();
+    let work_log = decrypt_string(&state, row.get("work_log_encrypted"))?;
+    if !has_artifact && work_log.trim().is_empty() {
         return Err(AppError::BadRequest(
             "Add a work log or artifact before submitting.".into(),
         ));
@@ -673,10 +702,17 @@ async fn save_assessment(
             "Choose a valid overall decision.".into(),
         ));
     }
-    let exam_id: String = sqlx::query_scalar("SELECT exam_id FROM submissions WHERE id=?")
+    let submission_row = sqlx::query("SELECT exam_id, status FROM submissions WHERE id=?")
         .bind(&id)
         .fetch_one(&state.db)
         .await?;
+    let exam_id: String = submission_row.get("exam_id");
+    let status: String = submission_row.get("status");
+    if status != "submitted" && status != "assessed" {
+        return Err(AppError::BadRequest(
+            "Wait for the candidate to submit evidence before assessing it.".into(),
+        ));
+    }
     let (exam, _, _) = load_exam(&state.db, &exam_id).await?;
     for criterion in &exam.rubric {
         match input.scores.get(&criterion.id) {
@@ -993,8 +1029,64 @@ async fn shutdown_signal() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{body::to_bytes, http::Request};
+    use axum::{
+        body::to_bytes,
+        http::{HeaderMap, Request},
+    };
     use tower::ServiceExt;
+
+    async fn json_request(app: &Router, request: Request<Body>) -> (StatusCode, HeaderMap, Value) {
+        let response = app.clone().oneshot(request).await.unwrap();
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body =
+            serde_json::from_slice(&to_bytes(response.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        (status, headers, body)
+    }
+
+    fn exam_payload() -> Value {
+        json!({
+            "title": "Deploy a small service",
+            "brief": "Build and verify a small HTTP service, then explain the decisions you made.",
+            "duration_minutes": 60,
+            "deletion_days": 14,
+            "accommodations": "Assistive technology is permitted.",
+            "criteria": [{ "label": "Works", "description": "Service responds", "max_score": 4 }]
+        })
+    }
+
+    async fn create_started_submission(app: &Router) -> (String, String, String, String) {
+        let (status, _, created) = json_request(
+            app,
+            Request::post("/api/exams")
+                .header("content-type", "application/json")
+                .body(Body::from(exam_payload().to_string()))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let exam_id = created["exam_id"].as_str().unwrap().to_owned();
+        let candidate_token = created["candidate_token"].as_str().unwrap().to_owned();
+        let assessor_token = created["assessor_token"].as_str().unwrap().to_owned();
+        let (status, _, started) = json_request(
+            app,
+            Request::post(format!("/api/exams/{exam_id}/start"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "token": candidate_token, "alias": "River" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        (
+            exam_id,
+            candidate_token,
+            assessor_token,
+            started["submission"]["id"].as_str().unwrap().to_owned(),
+        )
+    }
     async fn state() -> AppState {
         let db = SqlitePoolOptions::new()
             .max_connections(1)
@@ -1090,5 +1182,139 @@ mod tests {
                 .unwrap();
         assert_eq!(opened["role"], "candidate");
         assert_eq!(opened["exam"]["title"], "Deploy a small service");
+    }
+
+    #[tokio::test]
+    async fn candidate_must_submit_before_assessment_and_private_evidence_is_never_cached() {
+        let app = protected_app(state().await);
+        let (exam_id, candidate_token, assessor_token, submission_id) =
+            create_started_submission(&app).await;
+
+        let (status, _, body) = json_request(
+            &app,
+            Request::post(format!("/api/submissions/{submission_id}/assessment"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "token": assessor_token,
+                        "scores": {},
+                        "notes": "Premature assessment attempt.",
+                        "outcome": "meets"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            body["error"],
+            "Wait for the candidate to submit evidence before assessing it."
+        );
+
+        let (status, _, _) = json_request(
+            &app,
+            Request::post(format!("/api/submissions/{submission_id}/evidence"))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({
+                    "token": candidate_token,
+                    "work_log": "SENSITIVE-CACHE-SENTINEL: the candidate can keep working after an assessor opens the queue.",
+                    "command_history": "cargo test"
+                }).to_string()))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+
+        let (status, headers, body) = json_request(
+            &app,
+            Request::get(format!(
+                "/api/submissions/{submission_id}?token={assessor_token}"
+            ))
+            .body(Body::empty())
+            .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["submission"]["work_log"], "SENSITIVE-CACHE-SENTINEL: the candidate can keep working after an assessor opens the queue.");
+        assert_eq!(
+            headers.get(header::CACHE_CONTROL).unwrap(),
+            "private, no-store"
+        );
+        assert_eq!(headers.get(header::PRAGMA).unwrap(), "no-cache");
+        assert_eq!(
+            headers.get(header::STRICT_TRANSPORT_SECURITY).unwrap(),
+            "max-age=31536000; includeSubDomains"
+        );
+
+        let (status, _, _) = json_request(
+            &app,
+            Request::post(format!("/api/submissions/{submission_id}/submit"))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "token": candidate_token }).to_string()))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let (_, _, exam) = json_request(
+            &app,
+            Request::get(format!("/api/exams/{exam_id}?token={assessor_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        let criterion_id = exam["exam"]["rubric"][0]["id"].as_str().unwrap();
+        let (status, _, _) = json_request(
+            &app,
+            Request::post(format!("/api/submissions/{submission_id}/assessment"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "token": assessor_token,
+                        "scores": { criterion_id: 4 },
+                        "notes": "Assessment after candidate submission.",
+                        "outcome": "meets"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn whitespace_only_work_log_cannot_be_submitted_without_an_artifact() {
+        let app = protected_app(state().await);
+        let (_, candidate_token, _, submission_id) = create_started_submission(&app).await;
+        let (status, _, _) = json_request(
+            &app,
+            Request::post(format!("/api/submissions/{submission_id}/evidence"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "token": candidate_token,
+                        "work_log": " \n\t ",
+                        "command_history": ""
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let (status, _, body) = json_request(
+            &app,
+            Request::post(format!("/api/submissions/{submission_id}/submit"))
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "token": candidate_token }).to_string()))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            body["error"],
+            "Add a work log or artifact before submitting."
+        );
     }
 }

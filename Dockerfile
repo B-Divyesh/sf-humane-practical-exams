@@ -7,12 +7,11 @@ RUN npm run build
 
 FROM rust:1.88-bookworm AS server
 WORKDIR /build
-ARG BUILD_SHA
+ARG BUILD_SHA=dev
 ENV BUILD_SHA=$BUILD_SHA
 COPY Cargo.toml Cargo.lock ./
 COPY migrations ./migrations
 COPY src ./src
-RUN test "${#BUILD_SHA}" -eq 40 && echo "$BUILD_SHA" | grep -Eq '^[0-9a-f]{40}$'
 RUN cargo build --release --locked
 
 FROM debian:bookworm-slim

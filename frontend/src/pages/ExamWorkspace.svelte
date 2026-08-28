@@ -164,7 +164,7 @@
 </script>
 
 <Header compact />
-<main id="main" class="exam-workspace">
+<main id="main" class="exam-workspace" tabindex="-1">
   {#if !online}<div class="offline-banner" role="status">Offline — keep working; your typed draft is saved on this device.</div>{/if}
   {#if loading}
     <section class="loading-state" aria-live="polite"><div class="loading-mark"></div><h1>Opening the evidence trail…</h1><p>Checking this capability link.</p></section>
@@ -226,10 +226,18 @@
             <div class="evidence-readout"><section><p class="section-kicker">Candidate work log</p><div class="preserved-text">{submission.work_log || 'No work log supplied.'}</div></section><section><p class="section-kicker">Chosen command history</p><pre>{submission.command_history || 'No command history supplied.'}</pre></section></div>
             <div class="artifact-readout"><div><span>Artifact</span><strong>{submission.artifact_name || 'No artifact supplied'}</strong>{#if submission.artifact_size}<small>{bytes(submission.artifact_size)}</small>{/if}</div>{#if submission.artifact_name}<a class="button quiet small" href={`/api/submissions/${submission.id}/artifact?token=${encodeURIComponent(token)}`}>Download artifact</a>{/if}</div>
             <section class="checkpoint-readout"><p class="section-kicker">Checkpoint fingerprints</p>{#if submission.checkpoints.length}<ol>{#each submission.checkpoints as checkpoint}<li><div><strong>{checkpoint.label}</strong><time>{new Date(checkpoint.created_at).toLocaleString()}</time></div><code>{checkpoint.hash}</code></li>{/each}</ol>{:else}<p>No checkpoints were recorded.</p>{/if}</section>
-            <section class="scoring"><div class="scoring-heading"><p class="section-kicker">Transparent decision</p><h3>Score the rubric</h3></div>{#each exam.rubric as criterion}<div class="score-row"><div><label for="assess-{criterion.id}">{criterion.label}</label><p>{criterion.description}</p></div><div><input id="assess-{criterion.id}" type="number" min="0" max={criterion.max_score} value={scores[criterion.id] ?? ''} oninput={(event) => scores = { ...scores, [criterion.id]: Number(event.currentTarget.value) }} /><span>/ {criterion.max_score}</span></div></div>{/each}
-              <label for="outcome">Overall decision</label><select id="outcome" bind:value={outcome}><option value="meets">Meets standard</option><option value="partially_meets">Partially meets</option><option value="does_not_meet">Does not meet</option><option value="needs_follow_up">Needs evidence-focused follow-up</option></select>
-              <label for="notes">Assessor feedback</label><textarea id="notes" bind:value={notes} rows="6" maxlength="8000"></textarea><button class="button primary" type="button" disabled={busy === 'assess'} onclick={saveAssessment}>{busy === 'assess' ? 'Saving assessment…' : 'Save assessment →'}</button>
-            </section>
+            {#if submission.status === 'in_progress'}
+              <section class="scoring assessment-locked" aria-live="polite">
+                <p class="section-kicker">Candidate still working</p>
+                <h3>Scoring unlocks after submission</h3>
+                <p>The candidate controls when their evidence is handed over. You can review the work collected so far, but cannot score or finalize it until they submit.</p>
+              </section>
+            {:else}
+              <section class="scoring"><div class="scoring-heading"><p class="section-kicker">Transparent decision</p><h3>Score the rubric</h3></div>{#each exam.rubric as criterion}<div class="score-row"><div><label for="assess-{criterion.id}">{criterion.label}</label><p>{criterion.description}</p></div><div><input id="assess-{criterion.id}" type="number" min="0" max={criterion.max_score} value={scores[criterion.id] ?? ''} oninput={(event) => scores = { ...scores, [criterion.id]: Number(event.currentTarget.value) }} /><span>/ {criterion.max_score}</span></div></div>{/each}
+                <label for="outcome">Overall decision</label><select id="outcome" bind:value={outcome}><option value="meets">Meets standard</option><option value="partially_meets">Partially meets</option><option value="does_not_meet">Does not meet</option><option value="needs_follow_up">Needs evidence-focused follow-up</option></select>
+                <label for="notes">Assessor feedback</label><textarea id="notes" bind:value={notes} rows="6" maxlength="8000"></textarea><button class="button primary" type="button" disabled={busy === 'assess'} onclick={saveAssessment}>{busy === 'assess' ? 'Saving assessment…' : 'Save assessment →'}</button>
+              </section>
+            {/if}
           {/if}
         </div>
       </section>

@@ -6,7 +6,7 @@
 </script>
 
 <Header />
-<main id="main">
+<main id="main" tabindex="-1">
   <section class="hero">
     <div class="hero-copy">
       <p class="eyebrow"><span></span> Open book. Clear evidence. No surveillance.</p>

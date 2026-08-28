@@ -1,6 +1,6 @@
 # Humane Practical Exams — build handoff
 
-## Independent verification result: FAIL
+## Repair 2 verification result
 
 Verification date: 2026-08-28
 
@@ -10,16 +10,14 @@ Live URL: <https://humane-practical-exams.sociobot.in>
 
 Report: `.factory/verification.md`
 
-**Do not promote this candidate.** The live deployment matches the candidate and the free end-to-end path works, but independent verification found four release-blocking defects:
+The source repairs HPE-01, HPE-03, and HPE-04, plus HPE-05 through HPE-08. The free create-to-assess workflow remains intact and now keeps assessment candidate-controlled. HPE-02 is an external Sociobot billing-catalog dependency: on 2026-08-28, `GET https://api.sociobot.in/api/v1/products/humane-practical-exams/checkout` still returned `404 {"error":"enabled factory product"}` and the public catalog did not list the slug. This repository has the required Sociobot checkout/verification integration, but it cannot register a merchant product or touch billing. Do not promote the paid unlock until the factory enables that product and a hosted-checkout redirect is observed.
 
-1. An assessor can assess an `in_progress` submission; the candidate is then locked out of saving and submitting.
-2. The advertised $39 provider checkout returns HTTP 404 because the Sociobot product is not enabled.
-3. Decrypted submission GET responses lack an explicit `Cache-Control: no-store`/private policy.
-4. The Dockerfile omits the mandatory `ARG BUILD_SHA=dev` default and deliberately fails a local build when the factory SHA argument is absent.
+1. **HPE-01 fixed:** assessment writes now require `submitted` (or `assessed` for intentional edits). The assessor UI explains that scoring is locked for active work. Rust and Playwright coverage prove a direct premature assessment returns 400, the candidate can still save and submit, and scoring then unlocks.
+2. **HPE-03 fixed:** every `/api/` response, including decrypted details, artifact/export downloads, and errors, now carries `Cache-Control: private, no-store`, `Pragma: no-cache`, and `Expires: 0`.
+3. **HPE-04 fixed:** Docker declares `ARG BUILD_SHA=dev` and no longer validates/rejects omitted build identity. `tests/dockerfile-contract.sh` is included in `npm test`.
+4. **HPE-05–08 fixed:** the hero glow is clipped to its visual region at 390 px; skip navigation moves focus to `main`; Svelte waits for the error alert before focusing it; home and footer controls are at least 44 px; whitespace-only work logs are rejected server-side; and the app emits one-year HSTS with subdomains.
 
-Minor defects: 390 px landing-page horizontal overflow; skip-link and invalid-form focus gaps; two sub-44 px mobile targets; server acceptance of whitespace-only evidence; and no HSTS header.
-
-Fresh passing evidence includes `npm ci`, Svelte check, Rust fmt and strict Clippy, 2 frontend plus 4 Rust tests, the exact Vite and locked release builds, runtime contract, 8 Playwright repository tests, live create-to-delete workflow, encryption restart/expiry checks, concurrency smoke, 0 serious/critical Axe findings across 12 live states, 0 console/page errors, byte-identical live assets, and Lighthouse mobile 99/100/100/100 with 1.3 s LCP and 58 KiB transfer. See the verification report for exact commands, observations, and reproduction details.
+Fresh repair evidence: `npm ci` (148 packages, 0 vulnerabilities), `npm run check` (0 Svelte diagnostics), `npm test` (2 Vitest + 6 Rust tests plus Docker contract), `cargo fmt --check`, `cargo clippy --all-targets --locked -- -D warnings`, `npm run build`, `BUILD_SHA=dev cargo build --release --locked`, `npm run test:runtime`, and `npm run test:e2e` (12/12 Playwright checks across desktop Chromium and 390×844 mobile) all pass. Browser regressions include Axe serious/critical checks, offline draft recovery, console smoke, candidate-controlled assessment, private response headers, keyboard focus recovery, and 390 px no-overflow verification.
 
 Build date: 2026-08-28
 

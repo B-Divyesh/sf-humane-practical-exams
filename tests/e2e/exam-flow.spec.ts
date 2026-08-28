@@ -61,6 +61,71 @@ test('candidate evidence reaches the assessor and can be graded', async ({ page 
   expect((await download).suggestedFilename()).toMatch(/^assessment-.*\.json$/);
 });
 
+test('assessors cannot finalize an active submission, and candidates retain control until submission', async ({ page }) => {
+  await page.goto('/create');
+  await page.getByLabel(/Exam title/).fill('Candidate-controlled handoff');
+  await page.getByLabel(/Task brief/).fill('Build a small service, keep working until you choose to submit, and explain the evidence that supports your practical decisions.');
+  await page.getByRole('button', { name: /Create exam/ }).click();
+  const candidateLink = await page.getByLabel('Candidate capability link').inputValue();
+  const assessorLink = await page.getByLabel('Assessor capability link').inputValue();
+  const assessorToken = new URL(assessorLink).searchParams.get('token');
+  const examId = new URL(candidateLink).pathname.split('/').pop();
+
+  await page.goto(candidateLink);
+  await page.getByLabel(/Candidate name or alias/).fill('Active River');
+  await page.getByRole('button', { name: /Start .* task/ }).click();
+  await expect(page.getByLabel(/Work log/)).toBeVisible();
+  const submissionId = await page.evaluate((id) => localStorage.getItem(`hpe:submission:${id}`), examId);
+  expect(submissionId).toBeTruthy();
+
+  const blocked = await page.request.post(`/api/submissions/${submissionId}/assessment`, {
+    data: { token: assessorToken, scores: {}, notes: 'This must not lock the candidate.', outcome: 'meets' }
+  });
+  expect(blocked.status()).toBe(400);
+  await expect(blocked.json()).resolves.toMatchObject({ error: 'Wait for the candidate to submit evidence before assessing it.' });
+
+  await page.getByLabel(/Work log/).fill('SENSITIVE-CACHE-SENTINEL: I can continue documenting decisions after the assessor checks the queue.');
+  await page.getByRole('button', { name: 'Save encrypted evidence' }).click();
+  await expect(page.getByText('Evidence encrypted and saved to the submission.')).toBeVisible();
+  const detail = await page.request.get(`/api/submissions/${submissionId}?token=${assessorToken}`);
+  expect(detail.status()).toBe(200);
+  expect(detail.headers()['cache-control']).toBe('private, no-store');
+  expect(detail.headers()['strict-transport-security']).toBe('max-age=31536000; includeSubDomains');
+
+  await page.goto(assessorLink);
+  await page.getByRole('button', { name: /Active River/ }).click();
+  await expect(page.getByText('Scoring unlocks after submission')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Save assessment/ })).toHaveCount(0);
+
+  await page.goto(candidateLink);
+  await page.getByLabel(/Work log/).fill('SENSITIVE-CACHE-SENTINEL: I can continue documenting decisions after the assessor checks the queue and then hand over the complete record.');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: /Submit evidence/ }).click();
+  await expect(page.getByRole('heading', { name: 'Your work has been submitted.' })).toBeVisible();
+
+  await page.goto(assessorLink);
+  await page.getByRole('button', { name: /Active River/ }).click();
+  await expect(page.getByRole('button', { name: /Save assessment/ })).toBeVisible();
+});
+
+test('keyboard error recovery and the 390px shell preserve focus and viewport width', async ({ page }) => {
+  await page.goto('/');
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('main');
+
+  if (page.viewportSize()?.width === 390) {
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  }
+
+  await page.goto('/create');
+  await page.getByLabel(/Exam title/).fill('Focus recovery');
+  await page.getByLabel(/Task brief/).fill('Too short');
+  await page.getByRole('button', { name: /Create exam/ }).click();
+  await expect(page.locator('#form-error')).toBeFocused();
+});
+
 test('candidate drafts remain available while offline', async ({ page, context }) => {
   await page.goto('/create');
   await page.getByLabel(/Exam title/).fill('Offline evidence exercise');

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import Header from '../components/Header.svelte';
   import Footer from '../components/Footer.svelte';
   import { api, absoluteLink } from '../lib/api';
@@ -35,6 +36,7 @@
     error = '';
     if (!title.trim() || brief.trim().length < 40 || criteria.some((item) => !item.label.trim())) {
       error = 'Add a title, a task brief of at least 40 characters, and a name for every rubric criterion.';
+      await tick();
       document.getElementById('form-error')?.focus();
       return;
     }
@@ -65,7 +67,7 @@
 </script>
 
 <Header compact />
-<main id="main" class="workspace-shell">
+<main id="main" class="workspace-shell" tabindex="-1">
   {#if result}
     <section class="share-complete" aria-labelledby="created-title">
       <p class="eyebrow"><span></span> Exam ready</p>

@@ -5,7 +5,7 @@
 </script>
 
 <Header compact />
-<main id="main" class="legal-page">
+<main id="main" class="legal-page" tabindex="-1">
   {#if page === 'privacy'}
     <p class="eyebrow"><span></span> Plain-language policy</p><h1>Privacy</h1><p class="updated">Effective 28 August 2026</p>
     <p>Humane Practical Exams is designed to collect work evidence, not behavior. It does not use analytics, advertising trackers, webcams, browser monitoring, biometrics, or AI cheating detection.</p>

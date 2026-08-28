@@ -7,13 +7,16 @@
     document.documentElement.dataset.theme = light ? 'light' : 'dark';
     localStorage.setItem('hpe-theme', light ? 'light' : 'dark');
   }
+  function focusMain() {
+    requestAnimationFrame(() => document.getElementById('main')?.focus());
+  }
   if (typeof document !== 'undefined') {
     light = (localStorage.getItem('hpe-theme') || '') === 'light';
     if (light) document.documentElement.dataset.theme = 'light';
   }
 </script>
 
-<a class="skip-link" href="#main">Skip to main content</a>
+<a class="skip-link" href="#main" onclick={focusMain}>Skip to main content</a>
 <header class:compact>
   <a class="brand" href="/" onclick={(event) => { event.preventDefault(); navigate('/'); }} aria-label="Humane Practical Exams home">
     <svg viewBox="0 0 36 36" aria-hidden="true"><path d="M5 10 18 3l13 7v16l-13 7-13-7Z"/><path d="m9 20 5 5L27 11"/></svg>
