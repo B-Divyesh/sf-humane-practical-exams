@@ -1,4 +1,14 @@
 import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+
+test('landing and exam builder have no serious accessibility violations', async ({ page }) => {
+  await page.goto('/');
+  let results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact || ''))).toEqual([]);
+  await page.goto('/create');
+  results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact || ''))).toEqual([]);
+});
 
 test('instructor creates an exam and landing page has no console errors', async ({ page }) => {
   const errors: string[] = [];

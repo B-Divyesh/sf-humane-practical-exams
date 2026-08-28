@@ -65,6 +65,7 @@ seq 1 100 | xargs -P20 -I{} curl -fsS http://127.0.0.1:8080/health >/dev/null
 | `DATABASE_URL` | `sqlite://data/humane-exams.db?mode=rwc` | SQLite connection URL |
 | `STATIC_DIR` | `dist` | Built frontend directory |
 | `SUBMISSION_ENCRYPTION_KEY` | insecure development fallback | Master secret used to derive the at-rest encryption key; required in production |
+| `APP_ENV` | unset | Set to `production` to refuse startup without a 32+ character encryption key |
 | `BUILD_SHA` | `development` | Value returned by `/health` |
 
 Back up the encryption key separately from the database. Losing it makes encrypted submissions unrecoverable. Rotating it requires an explicit data migration.

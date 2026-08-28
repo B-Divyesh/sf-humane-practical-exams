@@ -50,7 +50,7 @@ button, input, textarea, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 a { color: var(--blue); text-underline-offset: 3px; }
 button { color: inherit; }
-img { display: block; max-width: 100%; }
+img { display: block; max-width: 100%; height: auto; }
 h1, h2, h3, p { margin-top: 0; }
 h1, h2, h3 { font-family: var(--display); line-height: 1.08; letter-spacing: -.035em; }
 h1 { font-size: clamp(2.6rem, 7vw, 5.35rem); font-weight: 640; }
