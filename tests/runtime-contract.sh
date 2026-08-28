@@ -22,7 +22,7 @@ cp -R dist "$test_root/dist"
 service_pid=$!
 
 attempt=0
-until response=$(curl --silent --show-error --fail "http://127.0.0.1:$test_port/health"); do
+until response=$(curl --silent --show-error --fail "http://127.0.0.1:$test_port/health" 2>/dev/null); do
   attempt=$((attempt + 1))
   if [ "$attempt" -ge 40 ]; then
     cat "$test_log" >&2

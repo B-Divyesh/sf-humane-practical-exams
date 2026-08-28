@@ -60,3 +60,23 @@ test('candidate evidence reaches the assessor and can be graded', async ({ page 
   await page.getByRole('link', { name: 'Export JSON' }).click();
   expect((await download).suggestedFilename()).toMatch(/^assessment-.*\.json$/);
 });
+
+test('candidate drafts remain available while offline', async ({ page, context }) => {
+  await page.goto('/create');
+  await page.getByLabel(/Exam title/).fill('Offline evidence exercise');
+  await page.getByLabel(/Task brief/).fill('Write a concise explanation of your approach, save a local draft when disconnected, and reconnect only when you are ready to submit evidence.');
+  await page.getByRole('button', { name: /Create exam/ }).click();
+  const candidateLink = await page.getByLabel('Candidate capability link').inputValue();
+
+  await page.goto(candidateLink);
+  await page.getByLabel(/Candidate name or alias/).fill('Offline River');
+  await page.getByRole('button', { name: /Start .* task/ }).click();
+  await context.setOffline(true);
+  try {
+    await expect(page.getByText('Offline — keep working; your typed draft is saved on this device.')).toBeVisible();
+    await page.getByLabel(/Work log/).fill('This local draft must remain available while the connection is unavailable.');
+    await expect.poll(() => page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith('hpe:draft:')))).toBe(true);
+  } finally {
+    await context.setOffline(false);
+  }
+});
