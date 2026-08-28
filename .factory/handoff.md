@@ -1,5 +1,17 @@
 # Humane Practical Exams — build handoff
 
+## Independent verification 3 result — FAIL
+
+Verification date: 2026-08-28
+
+Candidate: `6505282a0a339c52cf5b13d3ac754ac81d056dd7`
+
+Live URL: <https://humane-practical-exams.sociobot.in>
+
+Report: `.factory/verification-3.md`
+
+**FAIL — do not promote.** Fresh evidence confirms the earlier deployment failure is resolved: `/health` reports the exact candidate, live frontend artifacts match the clean local build byte-for-byte, every repository check passes, the full create-to-delete workflow works on desktop and 390 px mobile, live Axe has zero serious/critical findings, browser/network/privacy policies pass, and Lighthouse scores 100 in all four tested categories. The remaining major acceptance defect is HPE-02: the required one-time provider unlock cannot be purchased. The UI has no buy action and the mandated Sociobot checkout endpoint returns HTTP 404. The factory must enable the billing-catalog product and the buy action before promotion.
+
 ## Repair 3 — verifier blockers resolved in product code
 
 Repair date: 2026-08-28
