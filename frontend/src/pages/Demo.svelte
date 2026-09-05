@@ -37,7 +37,7 @@
         work_log: 'I reproduced the missing-stock failure, added a regression test, then changed the repository query to return an empty stock record.',
         command_history: 'cargo test inventory_missing_stock\ncurl -i localhost:8080/items/sku-104/stock',
         checkpoints,
-        assessment: { scores, outcome, feedback }
+        assessment: { scores, outcome, notes: feedback }
       }
     };
     const href = URL.createObjectURL(new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' }));

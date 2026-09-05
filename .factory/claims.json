@@ -99,10 +99,10 @@
   },
   {
     "id": "no-webcam",
-    "claim": "The app does not request webcam or microphone access.",
+    "claim": "The app does not request webcam, microphone, or screen-capture access.",
     "where": "landing privacy boundary, candidate workspace, privacy, README",
     "test": "npm run test:claims -- --grep \"@claim:no-webcam\"",
-    "sandbox": "fresh demo page with media APIs instrumented; exercise sample review and assert zero media calls"
+    "sandbox": "fresh demo page with camera, microphone, and display-capture APIs instrumented; exercise sample review and assert zero media calls"
   },
   {
     "id": "no-browser-lock",
@@ -113,10 +113,10 @@
   },
   {
     "id": "no-biometrics",
-    "claim": "Candidate entry does not request a biometric or platform credential.",
-    "where": "landing privacy boundary, privacy, README",
+    "claim": "Candidate entry uses an alias, requests no biometric or platform credential, and checkpoint hashes do not claim identity or authorship.",
+    "where": "landing privacy boundary, candidate workspace, privacy, terms, README",
     "test": "npm run test:claims -- --grep \"@claim:no-biometrics\"",
-    "sandbox": "fresh candidate page with credential API instrumented; enter an alias and assert zero credential requests"
+    "sandbox": "fresh candidate page with credential API instrumented; enter an alias, assert zero credential requests, and inspect the exported hash disclaimer"
   },
   {
     "id": "no-ai-score",
@@ -159,6 +159,13 @@
     "where": "create page, privacy, terms, README",
     "test": "npm run test:claims -- --grep \"@claim:license-restore\"",
     "sandbox": "fresh browser with the Sociobot verification endpoint fulfilled by a recorded valid response; assert query cleanup, namespaced storage, verification tokens, and provider control"
+  },
+  {
+    "id": "license-revocation",
+    "claim": "A revoked license response disables provider tools on the next verification.",
+    "where": "terms, create-page license notice",
+    "test": "npm run test:claims -- --grep \"@claim:license-revocation\"",
+    "sandbox": "fresh browser with a recorded revoked response; assert the cached verdict becomes invalid, provider controls disappear, and the inactive notice appears"
   },
   {
     "id": "zero-config-runtime",

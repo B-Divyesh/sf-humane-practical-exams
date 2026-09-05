@@ -43,7 +43,7 @@
     <h2>Provider tools</h2>
     <p>The optional provider tools cost $39 once when checkout is available. New purchases are not currently available.</p>
     <p>Existing licenses can be restored. Sociobot is the merchant of record and handles refunds when checkout is available.</p>
-    <p>A refund revokes the related license. Accessibility, safety, assessment, export, and deletion do not require provider tools.</p>
+    <p>A revoked license disables provider tools after the next check. Accessibility, safety, assessment, export, and deletion remain free.</p>
     <h2>Self-hosting</h2>
     <p>The source uses the MIT license. A self-hosting organization controls its notices, retention, backups, and encryption key.</p>
   {/if}

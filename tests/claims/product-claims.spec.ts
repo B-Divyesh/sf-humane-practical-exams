@@ -70,7 +70,11 @@ test('@claim:demo-sandbox sample is populated, resettable, exportable, and isola
     format: 'humane-practical-exam/v1',
     sample: true,
     exam: { title: 'Repair a failing inventory API' },
-    submission: { alias: 'Riley', artifact_name: 'inventory-api.tar.gz' }
+    submission: {
+      alias: 'Riley',
+      artifact_name: 'inventory-api.tar.gz',
+      assessment: { notes: 'The repair handles missing stock records and preserves the existing API response shape.' }
+    }
   });
 
   expect(await page.evaluate(() => localStorage.getItem('hpe:last-template'))).toBe('REAL-TEMPLATE-MARKER');
@@ -282,13 +286,17 @@ test('@claim:offline-drafts typed candidate work remains in its own browser cont
   }
 });
 
-test('@claim:no-webcam the sample flow never requests camera or microphone access', async ({ page }) => {
+test('@claim:no-webcam the sample flow never requests camera, microphone, or screen access', async ({ page }) => {
   await page.addInitScript(() => {
     (window as unknown as { mediaCalls: number }).mediaCalls = 0;
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: {
         getUserMedia: () => {
+          (window as unknown as { mediaCalls: number }).mediaCalls += 1;
+          return Promise.reject(new Error('blocked in claim test'));
+        },
+        getDisplayMedia: () => {
           (window as unknown as { mediaCalls: number }).mediaCalls += 1;
           return Promise.reject(new Error('blocked in claim test'));
         }
@@ -319,7 +327,7 @@ test('@claim:no-browser-lock the sample stays navigable without fullscreen or po
   expect(await page.evaluate(() => (window as unknown as { lockCalls: number }).lockCalls)).toBe(0);
 });
 
-test('@claim:no-biometrics candidate entry does not request a platform credential', async ({ page, request }) => {
+test('@claim:no-biometrics candidate entry uses an alias and makes no identity or authorship claim', async ({ page, request }) => {
   const created = await createExam(request);
   await page.addInitScript(() => {
     (window as unknown as { credentialCalls: number }).credentialCalls = 0;
@@ -338,6 +346,13 @@ test('@claim:no-biometrics candidate entry does not request a platform credentia
   await page.getByLabel(/Candidate name or alias/).fill('Alias only');
   await expect(page.getByRole('button', { name: /Start 90-minute task/ })).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { credentialCalls: number }).credentialCalls)).toBe(0);
+  const started = await request.post('/api/exams/' + created.exam_id + '/start', {
+    data: { token: created.candidate_token, alias: 'Alias only' }
+  });
+  expect(started.status()).toBe(200);
+  const submissionId = (await started.json()).submission.id as string;
+  const exported = await request.get('/api/submissions/' + submissionId + '/export?token=' + created.candidate_token);
+  expect((await exported.json()).integrity_note).toContain('do not prove identity or authorship');
 });
 
 test('@claim:no-ai-score rubric scores remain assessor-entered and make no model request', async ({ page }) => {
@@ -463,6 +478,17 @@ test('@claim:license-restore an incoming or pasted valid license enables provide
   await expect(page.getByLabel(/Provider name/)).toBeVisible();
   expect(verificationTokens).toContain('return-license-token');
   expect(verificationTokens).toContain('pasted-license-token');
+});
+
+test('@claim:license-revocation a revoked license disables provider tools after verification', async ({ page }) => {
+  await page.route('https://api.sociobot.in/api/v1/products/humane-practical-exams/verify?*', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"valid":false,"reason":"revoked","expires_at":null}' });
+  });
+  await page.goto('/?license=revoked-license-token');
+  await page.goto('/create');
+  await expect(page.getByText(/License no longer active/)).toBeVisible();
+  await expect(page.getByLabel(/Provider name/)).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('sb_license:humane-practical-exams:verdict') || 'null')?.valid)).toBe(false);
 });
 
 test('@claim:zero-config-runtime the built service starts with only PORT and persists its generated key', async ({ page }) => {
