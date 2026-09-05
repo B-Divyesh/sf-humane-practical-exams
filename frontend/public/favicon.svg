@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Humane Practical Exams">
+  <rect width="64" height="64" rx="15" fill="#07111f"/>
+  <path d="M11 19 32 8l21 11v26L32 56 11 45Z" fill="#102438" stroke="#6de7c5" stroke-width="3"/>
+  <path d="m19 35 8 8 19-24" fill="none" stroke="#76b9ff" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>
+</svg>

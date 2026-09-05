@@ -1,16 +1,33 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import Landing from './pages/Landing.svelte';
+  import Demo from './pages/Demo.svelte';
   import CreateExam from './pages/CreateExam.svelte';
   import ExamWorkspace from './pages/ExamWorkspace.svelte';
   import Legal from './pages/Legal.svelte';
   import NotFound from './pages/NotFound.svelte';
   import { captureLicense } from './lib/license';
+  import { applyMetadata } from './lib/metadata';
 
   let path = window.location.pathname;
+  let routeAnnouncement = '';
+  async function updateRoute(focusHeading = true) {
+    path = window.location.pathname;
+    const metadata = applyMetadata(path);
+    routeAnnouncement = metadata.title;
+    if (focusHeading) {
+      await tick();
+      const heading = document.querySelector<HTMLElement>('main h1');
+      if (heading) {
+        heading.tabIndex = -1;
+        heading.focus({ preventScroll: true });
+      }
+    }
+  }
   onMount(() => {
     captureLicense();
-    const update = () => path = window.location.pathname;
+    applyMetadata(path);
+    const update = () => { void updateRoute(); };
     window.addEventListener('popstate', update);
     return () => window.removeEventListener('popstate', update);
   });
@@ -19,6 +36,8 @@
 
 {#if path === '/'}
   <Landing />
+{:else if path === '/demo'}
+  <Demo />
 {:else if path === '/create'}
   <CreateExam />
 {:else if examMatch}
@@ -28,3 +47,5 @@
 {:else}
   <NotFound />
 {/if}
+
+<div class="visually-hidden" aria-live="polite" aria-atomic="true">{routeAnnouncement}</div>

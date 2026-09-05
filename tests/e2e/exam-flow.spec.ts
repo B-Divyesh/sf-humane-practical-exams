@@ -5,17 +5,90 @@ test('landing and exam builder have no serious accessibility violations', async 
   await page.goto('/');
   let results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact || ''))).toEqual([]);
+  await page.goto('/demo');
+  results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact || ''))).toEqual([]);
   await page.goto('/create');
   results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact || ''))).toEqual([]);
 });
 
+test('routes expose distinct metadata, a sitemap, and real browser and API 404 responses', async ({ page, request }) => {
+  const routes = [
+    ['/', 'Humane Practical Exams — Run practical exams'],
+    ['/demo', 'Demo — Humane Practical Exams'],
+    ['/create', 'Create an exam — Humane Practical Exams'],
+    ['/privacy', 'Privacy — Humane Practical Exams'],
+    ['/terms', 'Terms — Humane Practical Exams']
+  ] as const;
+  for (const [path, title] of routes) {
+    const response = await page.goto(path);
+    expect(response?.status()).toBe(200);
+    await expect(page).toHaveTitle(title);
+    await expect(page.locator('main h1')).toHaveCount(1);
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://humane-practical-exams.sociobot.in' + path);
+  }
+  const missing = await page.goto('/not-a-real-page');
+  expect(missing?.status()).toBe(404);
+  await expect(page).toHaveTitle('Page not found — Humane Practical Exams');
+  await expect(page.getByRole('heading', { name: 'We could not find this page' })).toBeVisible();
+  const apiMissing = await request.get('/api/not-a-real-route');
+  expect(apiMissing.status()).toBe(404);
+  expect(apiMissing.headers()['content-type']).toContain('application/json');
+  await expect(apiMissing.json()).resolves.toEqual({ error: 'That API route does not exist.' });
+  const sitemap = await request.get('/sitemap.xml');
+  expect(sitemap.status()).toBe(200);
+  expect(await sitemap.text()).toContain('/demo');
+});
+
+test('client navigation and browser history move focus to the new page heading', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Try it with sample data' }).click();
+  await expect(page.getByRole('heading', { name: 'Review a completed practical exam' })).toBeFocused();
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Run practical exams without surveillance' })).toBeFocused();
+});
+
+test('demo sample resets without API writes or real-data changes', async ({ page }) => {
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/api/') && request.method() !== 'GET') writes.push(request.url());
+  });
+  await page.addInitScript(() => localStorage.setItem('hpe:last-template', 'real-data-marker'));
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Try it with sample data' }).click();
+  await expect(page.getByText('Demo — sample data, nothing is saved')).toBeVisible();
+  await expect(page.getByText('inventory-api.tar.gz')).toBeVisible();
+  await page.getByLabel('Assessor feedback').fill('temporary demo change');
+  await page.getByRole('button', { name: 'Reset demo' }).click();
+  await expect(page.getByLabel('Assessor feedback')).toHaveValue('The repair handles missing stock records and preserves the existing API response shape.');
+  expect(await page.evaluate(() => localStorage.getItem('hpe:last-template'))).toBe('real-data-marker');
+  expect(writes).toEqual([]);
+});
+
+test('reduced motion, 200% text, and touch targets preserve the mobile demo', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/demo');
+  const animationDuration = await page.locator('.demo-banner').evaluate((element) => getComputedStyle(element).animationDuration);
+  expect(Number.parseFloat(animationDuration)).toBeLessThanOrEqual(0.01);
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+  await expect(page.getByRole('heading', { name: 'Review a completed practical exam' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
+  const smallTargets = await page.locator('a:visible, button:visible, input:visible, select:visible, textarea:visible').evaluateAll((elements) =>
+    elements
+      .map((element) => ({ label: element.getAttribute('aria-label') || element.textContent?.trim() || element.tagName, box: element.getBoundingClientRect() }))
+      .filter(({ box }) => box.width < 44 || box.height < 44)
+      .map(({ label, box }) => ({ label, width: box.width, height: box.height }))
+  );
+  expect(smallTargets).toEqual([]);
+});
+
 test('theme changes never animate primary buttons through low-contrast colors', async ({ page }) => {
   await page.goto('/');
-  const primary = page.getByRole('link', { name: 'Create an exam', exact: true }).first();
+  const primary = page.getByRole('link', { name: 'Try it with sample data' }).first();
   await expect(primary).toBeVisible();
   await expect(page.locator('a[href*="/checkout"]')).toHaveCount(0);
-  await expect(page.getByText(/New provider unlock purchases are temporarily unavailable/)).toBeVisible();
+  await expect(page.getByText(/New provider tool purchases are temporarily unavailable/)).toBeVisible();
   expect(await primary.evaluate((element) => getComputedStyle(element).transitionProperty))
     .not.toContain('background');
 
@@ -32,14 +105,14 @@ test('instructor creates an exam and landing page has no console errors', async 
   const errors: string[] = [];
   page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('See the work.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run practical exams without surveillance');
   await expect(page.locator('main')).toBeVisible();
   await expect(page.locator('img[alt]')).toHaveCount(1);
   await page.getByRole('link', { name: 'Create an exam', exact: true }).first().click();
   await page.getByLabel(/Exam title/).fill('Build a health endpoint');
   await page.getByLabel(/Task brief/).fill('Create a small HTTP service with a health endpoint, tests, and a concise explanation of your design choices.');
   await page.getByRole('button', { name: /Create exam/ }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Two links. Two clear roles.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Share separate role links');
   expect(errors).toEqual([]);
 });
 

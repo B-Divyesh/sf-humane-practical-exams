@@ -71,7 +71,7 @@
   {#if result}
     <section class="share-complete" aria-labelledby="created-title">
       <p class="eyebrow"><span></span> Exam ready</p>
-      <h1 id="created-title">Two links. Two clear roles.</h1>
+      <h1 id="created-title">Share separate role links</h1>
       <p class="lede">These capability links are shown once. Store the assessor link safely; anyone with it can grade and delete submissions.</p>
       <div class="link-panes">
         <article>
@@ -94,7 +94,7 @@
     </section>
   {:else}
     <section class="create-heading">
-      <div><p class="eyebrow"><span></span> Exam builder</p><h1>Make the evidence<br><i>clear before the clock starts.</i></h1></div>
+      <div><p class="eyebrow"><span></span> Exam builder</p><h1>Create a practical exam</h1></div>
       <p>Everything the candidate will be asked to share is visible here. No hidden collection, no monitoring in the background.</p>
     </section>
 
@@ -114,14 +114,14 @@
       </section>
       <section aria-labelledby="conditions-section">
         <div class="form-section-number">02</div>
-        <div class="form-fields"><h2 id="conditions-section">Conditions and care</h2><p>Set expectations without constraining ordinary behavior.</p>
+        <div class="form-fields"><h2 id="conditions-section">Time, deletion, and accommodations</h2><p>Set the working conditions candidates see before they start.</p>
           <div class="field-row">
             <div><label for="duration">Working time <span>minutes</span></label><input id="duration" type="number" bind:value={duration} min="10" max="1440" required /></div>
             <div><label for="deletion">Delete after <span>days from start</span></label><input id="deletion" type="number" bind:value={deletionDays} min="1" max="365" required /></div>
           </div>
           <label for="accommodations">Accommodations and permitted tools</label>
           <textarea id="accommodations" bind:value={accommodations} rows="4" maxlength="2000"></textarea>
-          {#if $license.unlocked}<label for="provider">Provider name <span>provider unlock</span></label><input id="provider" bind:value={providerName} maxlength="100" />{/if}
+          {#if $license.unlocked}<label for="provider">Provider name <span>provider tools</span></label><input id="provider" bind:value={providerName} maxlength="100" />{/if}
         </div>
       </section>
       <section aria-labelledby="rubric-section">
@@ -145,7 +145,7 @@
     </form>
 
     {#if !$license.unlocked}
-      <details class="restore-panel"><summary>Have a provider license?</summary><div><label for="restore">Paste license token</label><input id="restore" bind:value={restoreToken} autocomplete="off" /><button type="button" class="button quiet" onclick={() => restoreLicense(restoreToken)}>Verify and restore</button><p>Existing provider licenses unlock templates and branding. {purchase.notice} Core exam and export features remain free.</p></div></details>
+      <details class="restore-panel"><summary>Have a provider license?</summary><div><label for="restore">Paste license token</label><input id="restore" bind:value={restoreToken} autocomplete="off" /><button type="button" class="button quiet" onclick={() => restoreLicense(restoreToken)}>Verify and restore</button><p>Existing provider licenses enable templates and provider names. {purchase.notice} Core exam and export features remain free.</p></div></details>
     {/if}
   {/if}
 </main>

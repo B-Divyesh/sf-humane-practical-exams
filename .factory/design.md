@@ -56,6 +56,10 @@ At 390px the three-stage diagram becomes a short vertical trail, navigation coll
 
 ## Asset plan and provenance
 
+The 1200×630 social preview is a centered crop of the reviewed source. It was exported as an 84-quality JPEG with ImageMagick on 2026-09-05. The favicon is a hand-authored SVG using the product hexagon and check mark. The 180px touch icon is a locally rendered version of the same mark. These derivatives add no third-party material.
+
+The demo uses the same evidence-plane grammar as the assessor workspace. Its sticky mint status band marks the sample boundary without creating a separate visual product.
+
 The hero uses one original generated illustration: an abstract, people-free landscape of translucent task cards, a glowing evidence path, checksum crystals, and a calm completed record. It explains that assessment is assembled from visible artifacts rather than observation. UI icons and the logo mark are hand-authored inline SVG.
 
 ### Prompt sheet
@@ -68,4 +72,3 @@ The hero uses one original generated illustration: an abstract, people-free land
 - **Negative list:** people, faces, cameras, eyes, surveillance imagery, locks, logos, readable text, watermark, generic office desk, purple gradient, excessive bloom
 
 Generation command: `/opt/fleet/lib/gen-image.sh "<prompt derived from the sheet>" assets/src/evidence-landscape.png 1536x1024 high` using the factory image deployment on 2026-08-28. Generated imagery is original to this product; output is reviewed for artifacts and converted locally to responsive WebP variants. No third-party visual assets are used.
-

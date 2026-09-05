@@ -167,7 +167,7 @@
 <main id="main" class="exam-workspace" tabindex="-1">
   {#if !online}<div class="offline-banner" role="status">Offline — keep working; your typed draft is saved on this device.</div>{/if}
   {#if loading}
-    <section class="loading-state" aria-live="polite"><div class="loading-mark"></div><h1>Opening the evidence trail…</h1><p>Checking this capability link.</p></section>
+    <section class="loading-state" aria-live="polite"><div class="loading-mark"></div><h1>Opening the exam…</h1><p>Checking this capability link.</p></section>
   {:else if error && !exam}
     <section class="empty-page"><p class="eyebrow"><span></span> Link unavailable</p><h1>We couldn’t open this exam.</h1><p>{error}</p><button class="button quiet" type="button" onclick={load}>Try again</button></section>
   {:else if exam}
@@ -197,7 +197,7 @@
         </section>
       {:else}
         <section class="workbench">
-          <div class="workbench-header"><div><p class="section-kicker">Candidate workspace</p><h2>Build your evidence trail</h2></div><div class:ended={remaining === 'Timebox ended'} class="timer"><span>Time remaining</span><strong>{remaining}</strong></div></div>
+          <div class="workbench-header"><div><p class="section-kicker">Candidate workspace</p><h2>Record your work</h2></div><div class:ended={remaining === 'Timebox ended'} class="timer"><span>Time remaining</span><strong>{remaining}</strong></div></div>
           <div class="workbench-layout">
             <div class="evidence-editor">
               <section><label for="work-log">Work log <span>Explain decisions, tests, and changes in your own words.</span></label><textarea id="work-log" bind:value={workLog} oninput={saveDraft} rows="12" placeholder="I began by…"></textarea></section>

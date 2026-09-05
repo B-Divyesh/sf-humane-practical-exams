@@ -10,6 +10,7 @@
     "test": "vitest run --config frontend/vite.config.ts && cargo test && sh tests/dockerfile-contract.sh",
     "test:runtime": "npm run build && cargo build --locked && sh tests/runtime-contract.sh",
     "test:e2e": "playwright test",
+    "test:claims": "playwright test --config playwright.claims.config.ts",
     "check": "svelte-check --workspace frontend --tsconfig ./tsconfig.json"
   },
   "devDependencies": {

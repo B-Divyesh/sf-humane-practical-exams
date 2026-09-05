@@ -7,21 +7,45 @@
 <Header compact />
 <main id="main" class="legal-page" tabindex="-1">
   {#if page === 'privacy'}
-    <p class="eyebrow"><span></span> Plain-language policy</p><h1>Privacy</h1><p class="updated">Effective 28 August 2026</p>
-    <p>Humane Practical Exams is designed to collect work evidence, not behavior. It does not use analytics, advertising trackers, webcams, browser monitoring, biometrics, or AI cheating detection.</p>
-    <h2>What is stored</h2><p>An exam stores its task brief, rubric, accommodations, and deletion setting. A submission may store a candidate-chosen alias, written work log, command excerpts, checkpoint hashes, one uploaded artifact, timestamps, and assessor feedback. Do not enter unnecessary personal information.</p>
-    <h2>How it is protected</h2><p>Submission text and artifact bytes are encrypted at rest. Access is controlled by unguessable candidate and assessor capability links. Treat an assessor link like a password. The service stores only one-way hashes of those tokens.</p>
-    <h2>Deletion</h2><p>Each exam has a deletion period of 1–365 days. Submission records are automatically purged after that date and an assessor can delete them earlier. Deletion is permanent. Locally saved candidate drafts remain in that browser until the candidate clears them.</p>
-    <h2>Payments</h2><p>The optional provider unlock is processed by Sociobot/Dodo, the merchant of record. This app receives a license token and verification result, not card details. The token and a daily verification cache are stored in your browser.</p>
-    <h2>Your choices</h2><p>Use an alias, share only relevant command history, export your record, or ask the assessor to delete a submission. A self-hosted operator is responsible for their deployment and encryption key.</p>
+    <p class="eyebrow"><span></span> Privacy policy</p><h1>Privacy</h1><p class="updated">Effective 5 September 2026</p>
+    <p>This app collects submitted work evidence. It does not collect video, audio, biometrics, screen activity, or browsing activity.</p>
+    <p>The app has no analytics or advertising trackers.</p>
+    <h2>Data the service stores</h2>
+    <p>An exam stores its task, rubric, accommodations, deletion setting, and role-link hashes.</p>
+    <p>A submission can store an alias, work log, chosen commands, checkpoint hashes, one artifact, timestamps, scores, and feedback.</p>
+    <p>Do not enter personal information that the assessment does not need.</p>
+    <h2>How the service protects submissions</h2>
+    <p>The service encrypts submission text and artifact bytes with AES-256-GCM before writing them to SQLite.</p>
+    <p>Candidate and assessor links use access tokens. The database stores one-way SHA-256 hashes of those tokens.</p>
+    <p>Anyone with a complete role link can use that role. Treat the assessor link like a password.</p>
+    <h2>Deletion</h2>
+    <p>Every submission gets the deletion period chosen for its exam. The server removes expired submissions and rejects later access.</p>
+    <p>An assessor can delete a submission sooner. This deletion cannot be undone.</p>
+    <p>Candidate drafts remain in that browser until submission or browser-data removal.</p>
+    <h2>Provider licenses</h2>
+    <p>This app can store a provider license token and its recent verification result in the browser.</p>
+    <p>License checks go only to the Sociobot API. The checkout for new purchases is not currently enabled.</p>
+    <h2>Your choices</h2>
+    <p>Use an alias. Share only relevant commands. Download the assessment record or ask the assessor to delete it.</p>
   {:else}
-    <p class="eyebrow"><span></span> Plain-language agreement</p><h1>Terms</h1><p class="updated">Effective 28 August 2026</p>
-    <p>Humane Practical Exams helps people conduct transparent, artifact-based practical assessments. By using it, you agree to use it lawfully and to explain the assessment conditions to candidates.</p>
-    <h2>Not cheat-proof</h2><p>The service does not verify identity or guarantee that work was completed without outside help. Checkpoint hashes show that chosen content existed at a recorded time; they do not prove authorship. Assessment decisions remain the assessor’s responsibility.</p>
-    <h2>Acceptable use</h2><p>Do not upload malware, unlawful material, secrets, or data you do not have permission to process. Do not use capability links to access someone else’s assessment. Operators may remove harmful content or rate-limit abusive traffic.</p>
-    <h2>Data and availability</h2><p>Keep exported copies of records you must retain. Content is deleted according to the exam’s schedule and may be unavailable during maintenance. The software is provided without warranties to the extent permitted by law.</p>
-    <h2>Provider unlock</h2><p>When available, the $39 provider unlock is a one-time purchase for the current listed features. New purchases are temporarily unavailable; existing licenses can still be restored. Sociobot/Dodo is the merchant of record and handles payment and refunds. A refunded purchase revokes its license automatically. Accessibility, safety, grading, and core export are not paid features.</p>
-    <h2>Self-hosting</h2><p>The source is MIT licensed. A self-hosting organization is the service operator and is responsible for notices, retention choices, backups, and safeguarding its encryption key.</p>
+    <p class="eyebrow"><span></span> Terms of use</p><h1>Terms</h1><p class="updated">Effective 5 September 2026</p>
+    <p>Use this app only for lawful practical assessments. Explain the task, evidence request, rubric, and deletion period before work starts.</p>
+    <h2>The app does not prove identity</h2>
+    <p>The service does not verify identity or prove that a candidate worked without help.</p>
+    <p>Checkpoint hashes identify candidate-chosen content at a recorded time. They do not prove authorship.</p>
+    <p>The assessor remains responsible for the final decision.</p>
+    <h2>Acceptable use</h2>
+    <p>Do not upload malware, unlawful material, secrets, or data you lack permission to process.</p>
+    <p>Do not use a role link to access another person’s assessment. The service may rate-limit abusive requests.</p>
+    <h2>Data and availability</h2>
+    <p>Keep exported copies of records you must retain. Scheduled or early deletion is permanent.</p>
+    <p>The service may be unavailable during maintenance. The software has no warranties beyond those required by law.</p>
+    <h2>Provider tools</h2>
+    <p>The optional provider tools cost $39 once when checkout is available. New purchases are not currently available.</p>
+    <p>Existing licenses can be restored. Sociobot is the merchant of record and handles refunds when checkout is available.</p>
+    <p>A refund revokes the related license. Accessibility, safety, assessment, export, and deletion do not require provider tools.</p>
+    <h2>Self-hosting</h2>
+    <p>The source uses the MIT license. A self-hosting organization controls its notices, retention, backups, and encryption key.</p>
   {/if}
 </main>
 <Footer />

@@ -1,0 +1,177 @@
+[
+  {
+    "id": "demo-sandbox",
+    "claim": "The sample opens a populated assessment, resets, exports JSON, and does not change real exam data.",
+    "where": "landing first screen, demo banner, README",
+    "test": "npm run test:claims -- --grep \"@claim:demo-sandbox\"",
+    "sandbox": "fresh browser page; real-data marker keys preloaded; enter from the landing action; assert no API writes and unchanged markers"
+  },
+  {
+    "id": "separate-role-links",
+    "claim": "Each new exam creates separate candidate and assessor capability links.",
+    "where": "landing how-it-works, create result, README",
+    "test": "npm run test:claims -- --grep \"@claim:separate-role-links\"",
+    "sandbox": "isolated claims SQLite database; create one exam; open both tokens and assert distinct roles plus wrong-token rejection"
+  },
+  {
+    "id": "rubric-visible",
+    "claim": "The candidate sees the scored rubric before starting.",
+    "where": "landing preview, candidate workspace, README",
+    "test": "npm run test:claims -- --grep \"@claim:rubric-visible\"",
+    "sandbox": "isolated exam reached after the demo entry point; candidate view before submission start"
+  },
+  {
+    "id": "candidate-handoff",
+    "claim": "The assessor cannot score before candidate submission, and submitted evidence can no longer change.",
+    "where": "assessor workspace, README",
+    "test": "npm run test:claims -- --grep \"@claim:candidate-handoff\"",
+    "sandbox": "isolated active submission; direct premature assessment is rejected and candidate evidence remains writable"
+  },
+  {
+    "id": "written-work-log",
+    "claim": "The assessor receives the work log the candidate submits.",
+    "where": "landing, candidate workspace, privacy, README",
+    "test": "npm run test:claims -- --grep \"@claim:written-work-log\"",
+    "sandbox": "isolated submission with a unique work-log value; assessor API must return the exact value"
+  },
+  {
+    "id": "chosen-commands",
+    "claim": "The assessor receives only command excerpts the candidate enters.",
+    "where": "landing, candidate workspace, privacy, README",
+    "test": "npm run test:claims -- --grep \"@claim:chosen-commands\"",
+    "sandbox": "isolated submission with two entered command lines; assessor API must return exactly those lines"
+  },
+  {
+    "id": "sha256-checkpoints",
+    "claim": "A checkpoint records the SHA-256 hash of candidate-chosen content.",
+    "where": "candidate workspace, privacy, terms, README",
+    "test": "npm run test:claims -- --grep \"@claim:sha256-checkpoints\"",
+    "sandbox": "isolated submission; compare returned checkpoint hash with an independent SHA-256 calculation"
+  },
+  {
+    "id": "one-artifact",
+    "claim": "A candidate can upload one artifact up to 15 MB, and a later upload replaces it.",
+    "where": "candidate workspace, privacy, README",
+    "test": "npm run test:claims -- --grep \"@claim:one-artifact\"",
+    "sandbox": "isolated submission; accept exact 15 MB, replace with a second file, download exact replacement bytes, reject 15 MB plus one byte"
+  },
+  {
+    "id": "portable-json",
+    "claim": "The exported JSON record includes the task, submitted evidence, rubric scores, feedback, and decision.",
+    "where": "landing, assessor workspace, README",
+    "test": "npm run test:claims -- --grep \"@claim:portable-json\"",
+    "sandbox": "isolated assessed submission; parse downloaded response and compare its task, evidence, scores, feedback, and decision"
+  },
+  {
+    "id": "encrypted-at-rest",
+    "claim": "Submission text and artifact bytes are AES-256-GCM encrypted before SQLite storage.",
+    "where": "privacy, README",
+    "test": "npm run test:claims -- --grep \"@claim:encrypted-at-rest\"",
+    "sandbox": "isolated claims SQLite database; save unique text and artifact sentinels, confirm neither appears in database files, then retrieve decrypted text"
+  },
+  {
+    "id": "token-hashes",
+    "claim": "The database stores SHA-256 hashes of role tokens instead of raw tokens.",
+    "where": "privacy, create result, README",
+    "test": "npm run test:claims -- --grep \"@claim:token-hashes\"",
+    "sandbox": "isolated claims SQLite database; create an exam, assert raw tokens are absent and independently calculated token hash is present"
+  },
+  {
+    "id": "scheduled-deletion",
+    "claim": "Expired submissions are purged before a read, and an assessor can delete them sooner.",
+    "where": "privacy, candidate and assessor workspaces, README",
+    "test": "npm run test:claims -- --grep \"@claim:scheduled-deletion\"",
+    "sandbox": "isolated early deletion followed by a 404; then an in-memory boundary test expires a live record and asserts empty assessor output plus physical deletion"
+  },
+  {
+    "id": "nonblocking-timer",
+    "claim": "The timebox is informational and does not lock candidate writing when time ends.",
+    "where": "candidate workspace, README",
+    "test": "npm run test:claims -- --grep \"@claim:nonblocking-timer\"",
+    "sandbox": "open demo, then run the isolated in-memory backend boundary test with an ended timebox and assert evidence remains writable"
+  },
+  {
+    "id": "offline-drafts",
+    "claim": "Typed candidate drafts remain available in that browser while it is offline.",
+    "where": "landing facts, candidate workspace, privacy, README",
+    "test": "npm run test:claims -- --grep \"@claim:offline-drafts\"",
+    "sandbox": "dedicated browser context; isolated candidate submission; set context offline, type work, assert field and namespaced local draft remain, then close only that context"
+  },
+  {
+    "id": "no-webcam",
+    "claim": "The app does not request webcam or microphone access.",
+    "where": "landing privacy boundary, candidate workspace, privacy, README",
+    "test": "npm run test:claims -- --grep \"@claim:no-webcam\"",
+    "sandbox": "fresh demo page with media APIs instrumented; exercise sample review and assert zero media calls"
+  },
+  {
+    "id": "no-browser-lock",
+    "claim": "The app does not lock the browser, use fullscreen, or request pointer lock.",
+    "where": "landing privacy boundary, privacy, README",
+    "test": "npm run test:claims -- --grep \"@claim:no-browser-lock\"",
+    "sandbox": "fresh demo page with fullscreen and pointer-lock APIs instrumented; navigate to create and back; assert zero lock calls"
+  },
+  {
+    "id": "no-biometrics",
+    "claim": "Candidate entry does not request a biometric or platform credential.",
+    "where": "landing privacy boundary, privacy, README",
+    "test": "npm run test:claims -- --grep \"@claim:no-biometrics\"",
+    "sandbox": "fresh candidate page with credential API instrumented; enter an alias and assert zero credential requests"
+  },
+  {
+    "id": "no-ai-score",
+    "claim": "Rubric scores are entered by the assessor, not generated by an AI cheating detector.",
+    "where": "landing privacy boundary, privacy, README",
+    "test": "npm run test:claims -- --grep \"@claim:no-ai-score\"",
+    "sandbox": "fresh demo; edit a rubric score and assert the value changes with no model or OpenAI request"
+  },
+  {
+    "id": "no-tracking",
+    "claim": "Using the sample sends requests only to the product origin and sets no product cookie.",
+    "where": "privacy, README",
+    "test": "npm run test:claims -- --grep \"@claim:no-tracking\"",
+    "sandbox": "dedicated clean browser context; record every sample request, cookie, and sendBeacon call"
+  },
+  {
+    "id": "free-core",
+    "claim": "Exam creation, submission, assessment, export, and deletion controls require no account or provider tools.",
+    "where": "landing pricing, create page, terms, README",
+    "test": "npm run test:claims -- --grep \"@claim:free-core\"",
+    "sandbox": "fresh unlicensed browser; complete create, candidate submit, assessor score, and JSON download while recording external requests"
+  },
+  {
+    "id": "provider-template",
+    "claim": "A cached valid provider license saves and reloads the last exam template on that device.",
+    "where": "landing pricing, create page, README",
+    "test": "npm run test:claims -- --grep \"@claim:provider-template\"",
+    "sandbox": "fresh browser with a recorded valid daily license verdict; create an exam, return to the form, load the saved template, and compare its title"
+  },
+  {
+    "id": "provider-branding",
+    "claim": "A cached valid provider license adds a provider name to new exams.",
+    "where": "landing pricing, create page, README",
+    "test": "npm run test:claims -- --grep \"@claim:provider-branding\"",
+    "sandbox": "fresh browser with a recorded valid daily license verdict; create a branded exam and assert the candidate view shows the provider name"
+  },
+  {
+    "id": "license-restore",
+    "claim": "An incoming or pasted valid Sociobot license enables provider tools on that device.",
+    "where": "create page, privacy, terms, README",
+    "test": "npm run test:claims -- --grep \"@claim:license-restore\"",
+    "sandbox": "fresh browser with the Sociobot verification endpoint fulfilled by a recorded valid response; assert query cleanup, namespaced storage, verification tokens, and provider control"
+  },
+  {
+    "id": "zero-config-runtime",
+    "claim": "The built service starts with only PORT and reuses its generated encryption key.",
+    "where": "README configuration and container sections",
+    "test": "npm run test:claims -- --grep \"@claim:zero-config-runtime\"",
+    "sandbox": "open demo, then run the runtime contract in a temporary directory with an empty process environment except PORT"
+  },
+  {
+    "id": "checkout-unavailable",
+    "claim": "New provider purchases are unavailable, so the app does not present a broken checkout action.",
+    "where": "landing pricing, create page, privacy, terms, README",
+    "test": "npm run test:claims -- --grep \"@claim:checkout-unavailable\"",
+    "sandbox": "fresh browser; assert the unavailable state, no checkout link, and no checkout request during the sample entry"
+  }
+]

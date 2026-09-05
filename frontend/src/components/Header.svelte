@@ -23,7 +23,9 @@
     <span>Humane <em>Practical Exams</em></span>
   </a>
   <nav aria-label="Primary navigation">
-    {#if !compact}<a href="#how">How it works</a>{/if}
+    {#if !compact}<a href="/#how">How it works</a>{/if}
+    <a href="/demo" onclick={(event) => { event.preventDefault(); navigate('/demo'); }}>Demo</a>
+    <a href="/privacy" onclick={(event) => { event.preventDefault(); navigate('/privacy'); }}>Privacy</a>
     <a href="/create" class="nav-action" onclick={(event) => { event.preventDefault(); navigate('/create'); }}>Create an exam</a>
     <button class="theme-button" type="button" onclick={toggleTheme} aria-label={light ? 'Use dark theme' : 'Use light theme'} title={light ? 'Use dark theme' : 'Use light theme'}>
       {light ? '◐' : '◑'}

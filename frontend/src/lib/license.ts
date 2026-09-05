@@ -9,7 +9,7 @@ const verdictKey = `${tokenKey}:verdict`;
 // factory registers the product and verifies its hosted redirect.
 export const purchase = {
   available: false,
-  notice: 'New provider unlock purchases are temporarily unavailable.'
+  notice: 'New provider tool purchases are temporarily unavailable.'
 } as const;
 export const license = writable({ unlocked: false, checking: false, notice: '' });
 

@@ -19,7 +19,7 @@ use axum::{
     http::{header, HeaderValue, Request, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{any, get, post},
     Json, Router,
 };
 use chrono::{Duration as ChronoDuration, Utc};
@@ -34,6 +34,7 @@ use tower_http::{
     compression::CompressionLayer,
     limit::RequestBodyLimitLayer,
     services::{ServeDir, ServeFile},
+    set_status::SetStatus,
     trace::TraceLayer,
 };
 use tracing::{error, info, warn};
@@ -195,9 +196,18 @@ async fn main() {
                 .add_directive("humane_practical_exams=info".parse().unwrap()),
         )
         .init();
-    let database_url = env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "sqlite://data/humane-exams.db?mode=rwc".into());
-    if let Err(error) = fs::create_dir_all("data") {
+    let data_dir = if FsPath::new("/data").is_dir() {
+        PathBuf::from("/data")
+    } else {
+        PathBuf::from("data")
+    };
+    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
+        format!(
+            "sqlite://{}?mode=rwc",
+            data_dir.join("humane-exams.db").display()
+        )
+    });
+    if let Err(error) = fs::create_dir_all(&data_dir) {
         error!(%error, "could not create the persistent data directory");
         return;
     }
@@ -216,14 +226,14 @@ async fn main() {
         error!(%error, "could not run database migrations");
         return;
     }
-    let (secret, key_source) = match load_encryption_secret(FsPath::new("data")) {
+    let (secret, key_source) = match load_encryption_secret(&data_dir) {
         Ok(value) => value,
         Err(error) => {
             error!(%error, "could not load or create the persistent encryption key");
             return;
         }
     };
-    info!(key_source, "encryption key configuration ready");
+    info!(key_source, data_dir = %data_dir.display(), "encryption key configuration ready");
     let key: [u8; 32] = Sha256::digest(secret.as_bytes()).into();
     let state = AppState {
         db,
@@ -336,6 +346,8 @@ fn build_app(state: AppState) -> Router {
         .route("/api/submissions/:id/assessment", post(save_assessment))
         .route("/api/submissions/:id/export", get(export_submission))
         .route("/api/submissions/:id/delete", post(delete_submission))
+        .route("/api", any(api_not_found))
+        .route("/api/*path", any(api_not_found))
         .with_state(state)
 }
 
@@ -350,9 +362,16 @@ fn protected_app(state: AppState) -> Router {
 
 fn app_with_static(state: AppState, dist: PathBuf) -> Router {
     let middleware_state = state.clone();
-    let fallback = ServeFile::new(dist.join("index.html"));
+    let index = dist.join("index.html");
+    let not_found = SetStatus::new(ServeFile::new(&index), StatusCode::NOT_FOUND);
     build_app(state)
-        .fallback_service(ServeDir::new(dist).fallback(fallback))
+        .route_service("/", ServeFile::new(&index))
+        .route_service("/demo", ServeFile::new(&index))
+        .route_service("/create", ServeFile::new(&index))
+        .route_service("/privacy", ServeFile::new(&index))
+        .route_service("/terms", ServeFile::new(&index))
+        .route_service("/exam/:id", ServeFile::new(&index))
+        .fallback_service(ServeDir::new(dist).not_found_service(not_found))
         // This must wrap the fallback service too. Axum only applies a router
         // layer to routes/fallbacks that already exist when the layer is added.
         .layer(middleware::from_fn_with_state(
@@ -366,31 +385,54 @@ async fn security_headers(
     request: Request<Body>,
     next: Next,
 ) -> Response {
-    let ip = request
-        .extensions()
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|value| value.0.ip())
-        .unwrap_or(IpAddr::from([0, 0, 0, 0]));
+    let path = request.uri().path().to_owned();
+    if path == "/health" {
+        let mut response = next.run(request).await;
+        apply_security_headers(response.headers_mut(), &path);
+        return response;
+    }
+    let ip = client_ip(&request);
     let mut windows = state.rate_windows.lock().await;
     let entry = windows.entry(ip).or_insert((Instant::now(), 0));
     if entry.0.elapsed() >= Duration::from_secs(60) {
         *entry = (Instant::now(), 0);
     }
     if entry.1 >= 300 {
+        let retry_after = 60_u64.saturating_sub(entry.0.elapsed().as_secs()).max(1);
         let mut response = (
             StatusCode::TOO_MANY_REQUESTS,
             Json(json!({ "error": "Too many requests. Wait a moment and try again." })),
         )
             .into_response();
+        response.headers_mut().insert(
+            header::RETRY_AFTER,
+            HeaderValue::from_str(&retry_after.to_string())
+                .unwrap_or_else(|_| HeaderValue::from_static("60")),
+        );
         apply_security_headers(response.headers_mut(), request.uri().path());
         return response;
     }
     entry.1 += 1;
     drop(windows);
-    let path = request.uri().path().to_owned();
     let mut response = next.run(request).await;
     apply_security_headers(response.headers_mut(), &path);
     response
+}
+
+fn client_ip(request: &Request<Body>) -> IpAddr {
+    request
+        .headers()
+        .get(header::HeaderName::from_static("x-forwarded-for"))
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(',').next())
+        .and_then(|value| value.trim().parse().ok())
+        .or_else(|| {
+            request
+                .extensions()
+                .get::<ConnectInfo<SocketAddr>>()
+                .map(|value| value.0.ip())
+        })
+        .unwrap_or(IpAddr::from([0, 0, 0, 0]))
 }
 
 fn apply_security_headers(headers: &mut axum::http::HeaderMap, path: &str) {
@@ -402,7 +444,7 @@ fn apply_security_headers(headers: &mut axum::http::HeaderMap, path: &str) {
         header::REFERRER_POLICY,
         HeaderValue::from_static("no-referrer"),
     );
-    headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.sociobot.in; script-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self' https://api.sociobot.in"));
+    headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'self'; img-src 'self' data:; style-src 'self'; connect-src 'self' https://api.sociobot.in; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self' https://api.sociobot.in"));
     headers.insert(
         header::HeaderName::from_static("permissions-policy"),
         HeaderValue::from_static("camera=(), microphone=(), geolocation=(), browsing-topics=()"),
@@ -435,6 +477,13 @@ fn apply_security_headers(headers: &mut axum::http::HeaderMap, path: &str) {
 
 async fn health() -> Json<Value> {
     Json(json!({ "status": "ok", "build": option_env!("BUILD_SHA").unwrap_or("development") }))
+}
+
+async fn api_not_found() -> (StatusCode, Json<Value>) {
+    (
+        StatusCode::NOT_FOUND,
+        Json(json!({ "error": "That API route does not exist." })),
+    )
 }
 
 async fn create_exam(
@@ -1355,7 +1404,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn assessor_list_purges_records_that_expire_while_service_is_running() {
+    async fn claim_nonblocking_timer_keeps_evidence_writable_after_timebox_ends() {
+        let state = state().await;
+        let app = protected_app(state.clone());
+        let (_, candidate_token, _, submission_id) = create_started_submission(&app).await;
+        sqlx::query("UPDATE submissions SET started_at=? WHERE id=?")
+            .bind("2000-01-01T00:00:00Z")
+            .bind(&submission_id)
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let (status, _, _) = json_request(
+            &app,
+            Request::post(format!("/api/submissions/{submission_id}/evidence"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "token": candidate_token,
+                        "work_log": "Work stays editable after the visible timebox ends.",
+                        "command_history": ""
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn claim_scheduled_deletion_purges_records_that_expire_while_service_is_running() {
         let state = state().await;
         let app = protected_app(state.clone());
         let (exam_id, _, assessor_token, submission_id) = create_started_submission(&app).await;
@@ -1426,6 +1504,7 @@ mod tests {
         );
 
         let asset = app
+            .clone()
             .oneshot(
                 Request::get("/assets/index-deadbeef.js")
                     .body(Body::empty())
@@ -1441,5 +1520,81 @@ mod tests {
             asset.headers().get(header::CACHE_CONTROL).unwrap(),
             "public, max-age=31536000, immutable"
         );
+
+        let missing_page = app
+            .clone()
+            .oneshot(
+                Request::get("/page-that-does-not-exist")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(missing_page.status(), StatusCode::NOT_FOUND);
+        assert!(missing_page
+            .headers()
+            .contains_key(header::CONTENT_SECURITY_POLICY));
+
+        let (status, headers, body) = json_request(
+            &app,
+            Request::get("/api/route-that-does-not-exist")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["error"], "That API route does not exist.");
+        assert_eq!(
+            headers.get(header::CACHE_CONTROL).unwrap(),
+            "private, no-store"
+        );
+    }
+
+    #[tokio::test]
+    async fn forwarded_client_rate_limit_returns_retry_after_and_isolates_clients() {
+        let app = protected_app(state().await);
+        for _ in 0..300 {
+            let (status, _, _) = json_request(
+                &app,
+                Request::get("/api/missing")
+                    .header("x-forwarded-for", "203.0.113.10, 10.0.0.4")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(status, StatusCode::NOT_FOUND);
+        }
+
+        let (status, headers, body) = json_request(
+            &app,
+            Request::get("/api/missing")
+                .header("x-forwarded-for", "203.0.113.10, 10.0.0.4")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            body["error"],
+            "Too many requests. Wait a moment and try again."
+        );
+        let retry_after: u64 = headers
+            .get(header::RETRY_AFTER)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!((1..=60).contains(&retry_after));
+
+        let (other_status, _, _) = json_request(
+            &app,
+            Request::get("/api/missing")
+                .header("x-forwarded-for", "203.0.113.11, 10.0.0.4")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(other_status, StatusCode::NOT_FOUND);
     }
 }

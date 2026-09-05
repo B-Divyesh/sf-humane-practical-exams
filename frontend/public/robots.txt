@@ -1,2 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /exam/
+
+Sitemap: https://humane-practical-exams.sociobot.in/sitemap.xml
