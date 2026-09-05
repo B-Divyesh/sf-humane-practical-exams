@@ -1,5 +1,19 @@
 # Humane Practical Exams — build handoff
 
+## Review 1 result — FAIL
+
+Review date: 2026-09-05
+
+Implementation reviewed: `2d8b16f0ad229c3ffec1d994c344eb49de791ae7`; documentation HEAD: `e976e4c2d1e3644e535d33cc2a2ac044f366b634`; live health reported the documentation-only SHA `6505282a0a339c52cf5b13d3ac754ac81d056dd7`.
+
+Report: `.factory/review-1.md`
+
+**FAIL — do not promote.** The free workflow’s previous implementation repairs remain verified, and clean local quality commands plus live desktop/mobile/browser accessibility checks pass. Six major blockers remain: no isolated one-click demo, no claims registry or claim tests, non-plain first-screen copy without the required audience/sample action, missing route metadata/sitemap/true HTTP 404, rate limiting without `Retry-After` or `X-Forwarded-For` client handling, and the still-unavailable required provider purchase. The report records 22 untested public claim groups. No product source was changed during this review.
+
+How verified: `npm ci`; `npm run check`; `npm test`; `npm run build`; `npm run test:runtime`; `npm run test:e2e`; `cargo fmt --check`; `cargo clippy --all-targets --locked -- -D warnings`; fresh live 1440 px and 390 px browser contexts; Playwright Axe; `verify-url.sh`; route/header/link/rate-limit checks. The standalone Axe CLI could not launch because the worker’s ChromeDriver and preinstalled Chromium versions are incompatible; Playwright Axe passed on the same live routes.
+
+Known gaps and next steps: see the ordered remediation list in `.factory/review-1.md`. The product is not a PWA, so service-worker update/reload behavior is not claimed. No live workflow data was created because there is no required isolated demo sandbox.
+
 ## Independent verification 3 result — FAIL
 
 Verification date: 2026-08-28
