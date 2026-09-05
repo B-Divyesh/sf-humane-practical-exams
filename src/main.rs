@@ -337,16 +337,19 @@ fn database_url_targets_data_mount(database_url: &str) -> bool {
 }
 
 async fn prepare_schema(db: &SqlitePool) -> Result<&'static str, sqlx::Error> {
-    let exists: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='exams'",
+    let existing_tables: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('exams','submissions','checkpoints','assessments')",
     )
     .fetch_one(db)
     .await?;
-    if exists > 0 {
-        return Ok("existing");
-    }
+    // Every statement uses IF NOT EXISTS. Running the schema on each boot repairs a first boot
+    // interrupted between table creations without changing an existing database.
     db.execute(sqlx::raw_sql(INITIAL_SCHEMA)).await?;
-    Ok("created")
+    Ok(match existing_tables {
+        4 => "existing",
+        0 => "created",
+        _ => "repaired-partial",
+    })
 }
 
 /// Returns a supplied override or creates a CSPRNG secret once and keeps it with the SQLite data.
@@ -1399,6 +1402,35 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(prepare_schema(&reopened).await.unwrap(), "existing");
+    }
+
+    #[tokio::test]
+    async fn schema_boot_repairs_an_interrupted_first_creation() {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TABLE exams (
+              id TEXT PRIMARY KEY, title TEXT NOT NULL, brief TEXT NOT NULL,
+              duration_minutes INTEGER NOT NULL, deletion_days INTEGER NOT NULL,
+              accommodations TEXT NOT NULL, provider_name TEXT, rubric_json TEXT NOT NULL,
+              candidate_token_hash TEXT NOT NULL, assessor_token_hash TEXT NOT NULL,
+              created_at TEXT NOT NULL
+            )",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        assert_eq!(prepare_schema(&db).await.unwrap(), "repaired-partial");
+        let required_tables: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('exams','submissions','checkpoints','assessments')",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(required_tables, 4);
     }
 
     #[tokio::test]
