@@ -30,7 +30,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    Row, SqlitePool,
+    Executor, Row, SqlitePool,
 };
 use thiserror::Error;
 use tower_http::{
@@ -44,6 +44,8 @@ use tower_http::{
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
+const INITIAL_SCHEMA: &str = include_str!("../migrations/0001_init.sql");
+#[cfg(test)]
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
 #[derive(Clone)]
@@ -235,18 +237,21 @@ async fn main() {
             return;
         }
     };
-    let mut migration_attempt = 1_u8;
+    let mut schema_attempt = 1_u8;
     loop {
-        match MIGRATOR.run(&db).await {
-            Ok(()) => break,
+        match prepare_schema(&db).await {
+            Ok(source) => {
+                info!(schema_source = source, "database schema ready");
+                break;
+            }
             Err(error)
-                if migration_attempt < 7 && error.to_string().contains("database is locked") =>
+                if schema_attempt < 7 && error.to_string().contains("database is locked") =>
             {
                 warn!(
-                    attempt = migration_attempt,
-                    "database migration is waiting for the previous revision"
+                    attempt = schema_attempt,
+                    "database schema is waiting for the previous revision"
                 );
-                migration_attempt += 1;
+                schema_attempt += 1;
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
             Err(error) => {
@@ -293,6 +298,19 @@ async fn main() {
     .with_graceful_shutdown(shutdown_signal())
     .await
     .expect("serve requests");
+}
+
+async fn prepare_schema(db: &SqlitePool) -> Result<&'static str, sqlx::Error> {
+    let exists: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='exams'",
+    )
+    .fetch_one(db)
+    .await?;
+    if exists > 0 {
+        return Ok("existing");
+    }
+    db.execute(sqlx::raw_sql(INITIAL_SCHEMA)).await?;
+    Ok("created")
 }
 
 /// Returns a supplied override or creates a CSPRNG secret once and keeps it with the SQLite data.
