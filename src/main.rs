@@ -5,6 +5,7 @@ use std::{
     io::{self, Write},
     net::{IpAddr, SocketAddr},
     path::{Path as FsPath, PathBuf},
+    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -27,7 +28,10 @@ use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use sqlx::{sqlite::SqlitePoolOptions, Row, SqlitePool};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    Row, SqlitePool,
+};
 use thiserror::Error;
 use tower_http::{
     catch_panic::CatchPanicLayer,
@@ -211,9 +215,18 @@ async fn main() {
         error!(%error, "could not create the persistent data directory");
         return;
     }
+    let connect_options = match SqliteConnectOptions::from_str(&database_url) {
+        Ok(options) => options
+            .create_if_missing(true)
+            .busy_timeout(Duration::from_secs(30)),
+        Err(error) => {
+            error!(%error, "database URL is invalid");
+            return;
+        }
+    };
     let db = match SqlitePoolOptions::new()
-        .max_connections(8)
-        .connect(&database_url)
+        .max_connections(1)
+        .connect_with(connect_options)
         .await
     {
         Ok(db) => db,
@@ -222,9 +235,25 @@ async fn main() {
             return;
         }
     };
-    if let Err(error) = MIGRATOR.run(&db).await {
-        error!(%error, "could not run database migrations");
-        return;
+    let mut migration_attempt = 1_u8;
+    loop {
+        match MIGRATOR.run(&db).await {
+            Ok(()) => break,
+            Err(error)
+                if migration_attempt < 7 && error.to_string().contains("database is locked") =>
+            {
+                warn!(
+                    attempt = migration_attempt,
+                    "database migration is waiting for the previous revision"
+                );
+                migration_attempt += 1;
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+            Err(error) => {
+                error!(%error, "could not run database migrations");
+                return;
+            }
+        }
     }
     let (secret, key_source) = match load_encryption_secret(&data_dir) {
         Ok(value) => value,
