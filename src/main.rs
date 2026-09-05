@@ -266,7 +266,17 @@ async fn main() {
             }
         }
     }
-    let (secret, key_source) = match load_encryption_secret(&data_dir) {
+    let submission_count: i64 = match sqlx::query_scalar("SELECT COUNT(*) FROM submissions")
+        .fetch_one(&db)
+        .await
+    {
+        Ok(count) => count,
+        Err(error) => {
+            error!(%error, "could not check stored submissions before loading the encryption key");
+            return;
+        }
+    };
+    let (secret, key_source) = match load_encryption_secret(&data_dir, submission_count == 0) {
         Ok(value) => value,
         Err(error) => {
             error!(%error, "could not load or create the persistent encryption key");
@@ -342,16 +352,21 @@ async fn prepare_schema(db: &SqlitePool) -> Result<&'static str, sqlx::Error> {
 /// Returns a supplied override or creates a CSPRNG secret once and keeps it with the SQLite data.
 /// The generated value is deliberately persisted: changing it would make existing encrypted
 /// submissions unreadable after a restart.
-fn load_encryption_secret(data_dir: &FsPath) -> io::Result<(String, &'static str)> {
+fn load_encryption_secret(
+    data_dir: &FsPath,
+    allow_empty_recovery: bool,
+) -> io::Result<(String, &'static str)> {
     load_encryption_secret_with_override(
         data_dir,
         env::var("SUBMISSION_ENCRYPTION_KEY").ok().as_deref(),
+        allow_empty_recovery,
     )
 }
 
 fn load_encryption_secret_with_override(
     data_dir: &FsPath,
     supplied_secret: Option<&str>,
+    allow_empty_recovery: bool,
 ) -> io::Result<(String, &'static str)> {
     if let Some(value) = supplied_secret.filter(|value| !value.trim().is_empty()) {
         return Ok((value.to_owned(), "supplied"));
@@ -360,27 +375,28 @@ fn load_encryption_secret_with_override(
     let path = data_dir.join("submission-encryption-key");
     match fs::read_to_string(&path) {
         Ok(value) if !value.trim().is_empty() => return Ok((value.trim().to_owned(), "persisted")),
-        Ok(_) => {
+        Ok(_) if !allow_empty_recovery => {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                "encryption key file is empty",
+                "encryption key file is empty but stored submissions may require it",
             ))
         }
+        Ok(_) => return replace_empty_secret_file(&path),
         Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
         Err(_) => {}
     }
 
-    let mut random = [0_u8; 32];
-    OsRng.fill_bytes(&mut random);
-    let generated = hex::encode(random);
+    let generated = random_secret();
     match write_secret_file(&path, &generated) {
         Ok(()) => Ok((generated, "generated")),
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
             let persisted = fs::read_to_string(&path)?;
-            if persisted.trim().is_empty() {
+            if persisted.trim().is_empty() && allow_empty_recovery {
+                replace_empty_secret_file(&path)
+            } else if persisted.trim().is_empty() {
                 Err(io::Error::new(
                     io::ErrorKind::InvalidData,
-                    "encryption key file is empty",
+                    "encryption key file is empty but stored submissions may require it",
                 ))
             } else {
                 Ok((persisted.trim().to_owned(), "persisted"))
@@ -390,15 +406,46 @@ fn load_encryption_secret_with_override(
     }
 }
 
+fn replace_empty_secret_file(path: &FsPath) -> io::Result<(String, &'static str)> {
+    let generated = random_secret();
+    let temp_path = path.with_extension(format!("replacement-{}", Uuid::new_v4()));
+    write_new_secret_file(&temp_path, &generated)?;
+    if let Err(error) = fs::rename(&temp_path, path) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(error);
+    }
+    Ok((generated, "regenerated-empty"))
+}
+
+fn random_secret() -> String {
+    let mut random = [0_u8; 32];
+    OsRng.fill_bytes(&mut random);
+    hex::encode(random)
+}
+
 fn write_secret_file(path: &FsPath, value: &str) -> io::Result<()> {
-    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    write_new_secret_file(path, value)
+}
+
+fn write_new_secret_file(path: &FsPath, value: &str) -> io::Result<()> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    writeln!(file, "{value}")?;
+    file.sync_all()?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        file.set_permissions(fs::Permissions::from_mode(0o600))?;
+        if let Err(error) = file.set_permissions(fs::Permissions::from_mode(0o600)) {
+            warn!(%error, "persistent volume did not accept an explicit key-file mode");
+        }
     }
-    writeln!(file, "{value}")?;
-    file.sync_all()
+    Ok(())
 }
 
 fn build_app(state: AppState) -> Router {
@@ -1280,9 +1327,9 @@ mod tests {
     fn absent_secret_generates_and_persists_a_reusable_key() {
         let directory = tempfile::tempdir().unwrap();
         let (generated, source) =
-            load_encryption_secret_with_override(directory.path(), None).unwrap();
+            load_encryption_secret_with_override(directory.path(), None, true).unwrap();
         let (persisted, persisted_source) =
-            load_encryption_secret_with_override(directory.path(), None).unwrap();
+            load_encryption_secret_with_override(directory.path(), None, true).unwrap();
         assert_eq!(source, "generated");
         assert_eq!(persisted_source, "persisted");
         assert_eq!(generated, persisted);
@@ -1297,6 +1344,24 @@ mod tests {
                 & 0o777;
             assert_eq!(mode, 0o600);
         }
+    }
+
+    #[test]
+    fn empty_secret_is_recovered_only_before_submissions_exist() {
+        let recoverable = tempfile::tempdir().unwrap();
+        let recoverable_path = recoverable.path().join("submission-encryption-key");
+        fs::write(&recoverable_path, "").unwrap();
+        let (secret, source) =
+            load_encryption_secret_with_override(recoverable.path(), None, true).unwrap();
+        assert_eq!(source, "regenerated-empty");
+        assert_eq!(secret.len(), 64);
+        assert_eq!(fs::read_to_string(recoverable_path).unwrap().trim(), secret);
+
+        let protected = tempfile::tempdir().unwrap();
+        fs::write(protected.path().join("submission-encryption-key"), "").unwrap();
+        let error = load_encryption_secret_with_override(protected.path(), None, false)
+            .expect_err("an empty key must not be replaced when submissions may exist");
+        assert!(error.to_string().contains("stored submissions"));
     }
 
     #[test]
