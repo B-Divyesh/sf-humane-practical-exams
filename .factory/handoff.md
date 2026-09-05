@@ -1,4 +1,4 @@
-# Humane Practical Exams — repair 4 handoff
+# Humane Practical Exams — verification 4 handoff
 
 Updated: 2026-09-05
 
@@ -6,13 +6,17 @@ Live URL: <https://humane-practical-exams.sociobot.in>
 
 Implementation SHA: `56a8ff0a6d6b8d925e90eaab75d9e0a15f0a88fe`
 
-Documentation SHA: the report-only commit containing this handoff. The final evidence report records its resolved SHA separately from the implementation.
+Documentation baseline SHA: `5e8b7a2ef516b553b00dfe97234d73827036c78f`
+
+Verification report: `.factory/verification-4.md`
 
 ## Outcome
 
-The product-code findings in review 1 are repaired and deployed. The live free workflow, isolated sample, claim tests, route structure, request limits, durable SQLite startup, and earlier fixes pass.
+**PASS — 0 findings and 0 untested public claims.** The product-code findings in review 1 are repaired and deployed. The live free workflow, isolated sample, claim tests, route structure, request limits, durable SQLite startup, and earlier fixes pass.
 
-One external dependency remains: the required Sociobot checkout endpoint still returns HTTP 404 because this product is not enabled in the billing catalog. Repository policy does not authorize billing-catalog changes. The product does not show a broken purchase link or imitate a paid flow. It names the unavailable state and keeps existing-license restore and revocation handling working. Do not call the paid purchase complete until the factory enables the product and the hosted checkout redirects successfully.
+The live health response reports the documentation baseline SHA. The only difference from implementation SHA `56a8ff0` is this handoff file, so the running product code is the reviewed implementation candidate.
+
+One external dependency remains: the Sociobot checkout endpoint returns HTTP 404 because this product is not enabled in the billing catalog. Repository policy does not authorize billing-catalog changes. The product does not show a broken purchase link or imitate a paid flow. It names the unavailable state and keeps existing-license restore and revocation handling working. This expected external 404 is not a product finding.
 
 ## Repairs completed
 
@@ -78,7 +82,7 @@ Results:
 - Container Apps revision `sf-humane-practical-exams--0000013` is provisioned successfully.
 - The existing `sf-humane-practical-exams-data` Azure Files share remains mounted at `/data`; min and max replicas are both 1.
 - Startup logs report `database_vfs=unix-dotfile`, `schema_source=existing`, `key_source=persisted`, and port 8080. No secret value is logged.
-- `/health` returns the exact implementation SHA.
+- `/health` returns the documentation baseline SHA; its product tree matches the implementation SHA because the intervening commit changes only this handoff.
 - Fresh 1440×1000 and 390×844 browser contexts both passed the landing, demo, reset, JSON download, start-for-real, keyboard, reduced-motion, legal-route, and designed-404 checks.
 - Live demo traffic stayed on the product origin, made zero exam API writes, and preserved the planted real-data marker.
 - Live Axe checks found zero serious or critical issues. The expected console line for the deliberate HTTP 404 was classified as expected; there were no other console, page, or request failures.
@@ -86,11 +90,11 @@ Results:
 - Live Lighthouse: Performance 100, Accessibility 100, Best Practices 100, SEO 100; LCP 1.1 s, TBT 0 ms, CLS 0, 62 KiB transferred.
 - Every discovered internal public link returned HTTP 200. Unknown pages return HTTP 404 with the designed page; unknown API routes return JSON 404.
 
-Evidence screenshots, Lighthouse JSON, and URL verification output are under `/work/.evidence/repair-4-live/`. The catalog description is copied to `/work/.evidence/catalog-description.txt`.
+Verification-4 evidence screenshots, Lighthouse JSON, URL checks, browser/claim logs, and the copied QA report are under `/work/.evidence/verify-4-live/`, `/work/.evidence/verify-4-local/`, and `/work/.evidence/qa-report.md`. The catalog description is copied to `/work/.evidence/catalog-description.txt`.
 
 ## Scope and next step
 
 - This is a web service, so CLI/library consumer-install checks do not apply.
 - It is not a PWA. Offline reload and service-worker update behavior are not claimed. The narrower browser-local draft behavior is tested offline.
 - The sample uses recorded license-verification fixtures and never spends or invents provider credentials.
-- Factory operator action: enable `humane-practical-exams` in the Sociobot billing catalog, verify the hosted checkout redirect and $39 one-time product, then restore the buy link and rerun the checkout claim.
+- Future factory action: enable `humane-practical-exams` in the Sociobot billing catalog, verify the hosted checkout redirect and $39 one-time product, then add a purchase action and rerun the checkout claim.
