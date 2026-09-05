@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::{
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
     Executor, Row, SqlitePool,
 };
 use thiserror::Error;
@@ -218,14 +218,20 @@ async fn main() {
         return;
     }
     let connect_options = match SqliteConnectOptions::from_str(&database_url) {
-        Ok(options) => options
-            .create_if_missing(true)
-            .busy_timeout(Duration::from_secs(30)),
+        Ok(options) => sqlite_options(options, &database_url),
         Err(error) => {
             error!(%error, "database URL is invalid");
             return;
         }
     };
+    info!(
+        database_vfs = if database_url_targets_data_mount(&database_url) {
+            "unix-dotfile"
+        } else {
+            "default"
+        },
+        "database locking configuration ready"
+    );
     let db = match SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(connect_options)
@@ -298,6 +304,26 @@ async fn main() {
     .with_graceful_shutdown(shutdown_signal())
     .await
     .expect("serve requests");
+}
+
+/// Azure Files is mounted through CIFS and does not implement the POSIX byte-range locking used
+/// by SQLite's default Unix VFS. SQLite's built-in dot-file VFS coordinates writers by creating a
+/// lock directory instead, which works on the durable share while retaining real inter-process
+/// exclusion during a rolling one-replica deployment.
+fn sqlite_options(options: SqliteConnectOptions, database_url: &str) -> SqliteConnectOptions {
+    let options = options
+        .create_if_missing(true)
+        .journal_mode(SqliteJournalMode::Delete)
+        .busy_timeout(Duration::from_secs(30));
+    if database_url_targets_data_mount(database_url) {
+        options.vfs("unix-dotfile")
+    } else {
+        options
+    }
+}
+
+fn database_url_targets_data_mount(database_url: &str) -> bool {
+    database_url.starts_with("sqlite:///data/") || database_url.starts_with("sqlite:/data/")
 }
 
 async fn prepare_schema(db: &SqlitePool) -> Result<&'static str, sqlx::Error> {
@@ -1271,6 +1297,43 @@ mod tests {
                 & 0o777;
             assert_eq!(mode, 0o600);
         }
+    }
+
+    #[test]
+    fn durable_database_urls_select_the_cifs_safe_vfs() {
+        assert!(database_url_targets_data_mount(
+            "sqlite:///data/humane-exams.db?mode=rwc"
+        ));
+        assert!(!database_url_targets_data_mount(
+            "sqlite://data/humane-exams.db?mode=rwc"
+        ));
+        assert!(!database_url_targets_data_mount("sqlite::memory:"));
+    }
+
+    #[tokio::test]
+    async fn dotfile_vfs_creates_and_reopens_the_schema() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("durable.db");
+        let options = SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(true)
+            .journal_mode(SqliteJournalMode::Delete)
+            .vfs("unix-dotfile")
+            .busy_timeout(Duration::from_secs(2));
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options.clone())
+            .await
+            .unwrap();
+        assert_eq!(prepare_schema(&db).await.unwrap(), "created");
+        db.close().await;
+
+        let reopened = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        assert_eq!(prepare_schema(&reopened).await.unwrap(), "existing");
     }
 
     #[tokio::test]
